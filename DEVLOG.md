@@ -49,10 +49,19 @@ Day 4 (after saturday, sunday and monday, much less time):
 
 # Plan
 
-Day 5 plan (tuesday, workday):
+
+Day 5 (tuesday, workday):
+* sounds for wood splitting
+* animated waterfall
+* tested TeaVM rollout, found a bug with thin lines rendering
+
+Hanging:
 * implement potato puller
 * implement cooking of potato salad
 * place activities on the level
+
+Known issues:
+* webgl does not render guidelines in precision check
 
 Day 6 plan (wednesday, workday):
 * start night sequence

@@ -49,7 +49,8 @@ class PrecisionCheck(
     private var speed: Float = 5f
     private var target: Float = 0f
     private var texture: Texture? = null
-    private var onFinishCallback: (Float) -> Unit = {}
+    private var onActionCallback: (position: Float, delta: Float) -> Unit = {_, _ -> }
+    private var onFinishCallback: (position: Float, delta: Float) -> Unit = {_, _ -> }
 
     private val powerTexture: Texture by remember { Texture("power.png") }
 
@@ -62,9 +63,13 @@ class PrecisionCheck(
             return
         }
         if (keycode == Keys.SPACE) {
-            fixedOnPosition = guidePosition
+            val currentPosition = guidePosition
+            fixedOnPosition = currentPosition
             timer = 0f
-            centerDelta?.let { actionDifference(it) }
+            centerDelta?.let {
+                actionDifference(it)
+                onActionCallback(currentPosition, it)
+            }
         }
     }
 
@@ -85,7 +90,7 @@ class PrecisionCheck(
         } else if (fixedOnPosition != null) {
             if (timer > disappearIn) {
                 showing = false
-                onFinishCallback(fixedOnPosition!!)
+                onFinishCallback(fixedOnPosition!!, centerDelta!!)
             }
             updateViewport(1f)
             fixedOnPosition ?: guidePosition
@@ -157,13 +162,15 @@ class PrecisionCheck(
         disappearIn: Float = SECONDS_TO_DISAPPEAR,
         showGuide: Boolean = false,
         appearing: Boolean = false,
-        onFinishCallback: (Float) -> Unit = {}
+        onActionCallback: (Float, Float) -> Unit = {_, _ -> },
+        onFinishCallback: (Float, Float) -> Unit = {_, _ -> },
     ) {
         this.texture = texture
         this.target = target
         this.isVertical = isVertical
         this.powerForFixedPosition = powerForFixedPosition
         this.appearing = appearing
+        this.onActionCallback = onActionCallback
         this.onFinishCallback = onFinishCallback
         this.speed = speed
         this.disappearIn = disappearIn

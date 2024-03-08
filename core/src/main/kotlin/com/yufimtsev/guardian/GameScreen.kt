@@ -2,13 +2,11 @@ package com.yufimtsev.guardian
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
-import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.Texture
-import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
-import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.maps.tiled.TiledMap
 import com.badlogic.gdx.maps.tiled.TmxMapLoader
@@ -107,6 +105,9 @@ class GameScreen(
 
     private val textDrawer: TextDrawer by remember { TextDrawer() }
 
+    private val chompSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("chomp.wav")) }
+    private val crashSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("crash.wav")) }
+
     init {
         map.forEachRectangle("block", world::addBlock)
         // TODO: correct this
@@ -118,30 +119,65 @@ class GameScreen(
         Gdx.input.inputProcessor = this
     }
 
-    private fun showText(text: String, ) {
+    private fun showText(text: String) {
         textToShow = text.split("\n")
         textCountdown = 5f
     }
 
     private fun showLogPowerCheck(appearing: Boolean = true, powerForFixedPosition: Float, count: Int = 3) {
-        precisionCheck.show(logTexture, target = 0.9f, speed = 3f, disappearIn = 1f, isVertical = true, powerForFixedPosition = powerForFixedPosition, showGuide = false, appearing = appearing) {
-            if (count > 1) {
+        precisionCheck.show(
+            logTexture,
+            target = 0.9f,
+            speed = 6f,
+            disappearIn = 1f,
+            isVertical = true,
+            powerForFixedPosition = powerForFixedPosition,
+            showGuide = false,
+            appearing = appearing,
+            onActionCallback = { position, delta ->
+                if (delta > 0.5f) {
+                    chompSound.play(0.6f)
+                } else {
+                    crashSound.play()
+                }
+            }) { position, delta ->
+            if (delta > 0.5f) {
+                showLogPowerCheck(appearing = false, powerForFixedPosition = powerForFixedPosition, count = count)
+            } else if (count > 1) {
                 showLogPrecisionCheck(appearing = false, count = count - 1)
             } else {
                 showText("NICE FIREWOOD")
             }
         }
     }
+
     private fun showLogPrecisionCheck(appearing: Boolean = true, count: Int = 3) {
-        precisionCheck.show(logTexture, target = 0f, speed = 3f, disappearIn = 0f, isVertical = true, powerForFixedPosition = null, showGuide = true, appearing = appearing) {
-            showLogPowerCheck(appearing = false, powerForFixedPosition = it, count = count)
+        precisionCheck.show(
+            logTexture,
+            target = 0f,
+            speed = 3f,
+            disappearIn = 0f,
+            isVertical = true,
+            powerForFixedPosition = null,
+            showGuide = true,
+            appearing = appearing
+        ) { position, delta ->
+            showLogPowerCheck(appearing = false, powerForFixedPosition = position, count = count)
         }
     }
 
     private fun showLettuceCheck(appearing: Boolean = true, count: Int = 3) {
-        precisionCheck.show(lettuceTexture, target =-0.8f, speed = 6f, isVertical = false, powerForFixedPosition = null, showGuide = true, appearing = appearing) {
+        precisionCheck.show(
+            lettuceTexture,
+            target = -0.8f,
+            speed = 6f,
+            isVertical = false,
+            powerForFixedPosition = null,
+            showGuide = true,
+            appearing = appearing
+        ) { position, delta ->
             if (count > 1) {
-                showLettuceCheck(appearing = false, count = count-1)
+                showLettuceCheck(appearing = false, count = count - 1)
             } else {
                 showText("NICE LETTUCE")
             }
@@ -158,7 +194,7 @@ class GameScreen(
         hud.update(delta)
 
         // clear screen
-        Gdx.gl.glClearColor(0.8f, 0.8f, 0.8f, 1f)
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
 
         // update camera position for map rendering
