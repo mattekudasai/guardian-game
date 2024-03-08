@@ -115,3 +115,9 @@ tasks.register('dist') {
 if(enableGraalNative == 'true') {
   apply from: file("nativeimage.gradle")
 }
+
+idea {
+  module {
+    downloadSources = true
+  }
+}

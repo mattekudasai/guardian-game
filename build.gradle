@@ -76,3 +76,9 @@ subprojects {
 }
 
 eclipse.project.name = 'guardian-of-the-mountain-peak' + '-parent'
+
+idea {
+  module {
+    downloadSources = true
+  }
+}

@@ -1,38 +1,25 @@
+@file:Suppress("DELEGATED_MEMBER_HIDES_SUPERTYPE_OVERRIDE")
+
 package com.yufimtsev.guardian
 
-import com.badlogic.gdx.graphics.Texture
-import com.badlogic.gdx.graphics.Texture.TextureFilter.Linear
-import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import ktx.app.KtxGame
 import ktx.app.KtxScreen
-import ktx.app.clearScreen
-import ktx.assets.disposeSafely
-import ktx.assets.toInternalFile
-import ktx.async.KtxAsync
-import ktx.graphics.use
 
-class GuardianGame : KtxGame<KtxScreen>() {
+class GuardianGame(private val refreshRateLimit: Int, private val toggleFullScreen: () -> Unit, private val debugRenderer: Boolean = false) : KtxGame<KtxScreen>() {
     override fun create() {
-        KtxAsync.initiate()
-
-        addScreen(FirstScreen())
-        setScreen<FirstScreen>()
-    }
-}
-
-class FirstScreen : KtxScreen {
-    private val image = Texture("logo.png".toInternalFile(), true).apply { setFilter(Linear, Linear) }
-    private val batch = SpriteBatch()
-
-    override fun render(delta: Float) {
-        clearScreen(red = 0.7f, green = 0.7f, blue = 0.7f)
-        batch.use {
-            it.draw(image, 100f, 160f)
-        }
+        addScreen(GameScreen(refreshRateLimit, toggleFullScreen, debugRenderer))
+        setScreen<GameScreen>()
     }
 
-    override fun dispose() {
-        image.disposeSafely()
-        batch.disposeSafely()
+    companion object {
+        const val PIXELS_PER_UNIT = 100f
+        const val VIRTUAL_WIDTH = 256f
+        const val VIRTUAL_HEIGHT = 240f
+//        const val VIRTUAL_WIDTH = 128f
+//        const val VIRTUAL_HEIGHT = 120f
+        const val MAX_PLAYER_VELOCITY = 1f
+        const val PLAYER_ACCELERATION = 0.1f
+//        const val VIRTUAL_WIDTH = 1280f
+//        const val VIRTUAL_HEIGHT = 768f
     }
 }

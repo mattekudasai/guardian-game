@@ -9,8 +9,8 @@ import com.yufimtsev.guardian.GuardianGame
 /** Launches the TeaVM/HTML application. */
 fun main() {
     val config = TeaApplicationConfiguration("canvas").apply {
-        width = 640
-        height = 480
+        width = 1920
+        height = 1080
     }
-    TeaApplication(GuardianGame(), config)
+    TeaApplication(GuardianGame(60, {}), config)
 }
