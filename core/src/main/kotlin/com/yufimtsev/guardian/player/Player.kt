@@ -12,6 +12,7 @@ import com.badlogic.gdx.physics.box2d.Body
 import com.badlogic.gdx.physics.box2d.BodyDef
 import com.badlogic.gdx.physics.box2d.CircleShape
 import com.badlogic.gdx.physics.box2d.FixtureDef
+import com.badlogic.gdx.physics.box2d.PolygonShape
 import com.badlogic.gdx.physics.box2d.World
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_RUNNING_VELOCITY
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_VELOCITY
@@ -33,9 +34,15 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
         type = BodyDef.BodyType.DynamicBody
     }).apply {
         createFixture(FixtureDef().apply {
-            shape = CircleShape().apply {
-                radius = 8f.units
+            shape = PolygonShape().apply {
+                setAsBox(
+                    4f.units,
+                    8f.units
+                )
             }
+            /*shape = CircleShape().apply {
+                radius = 8f.units
+            }*/
             friction = 0.8f
         })
     }

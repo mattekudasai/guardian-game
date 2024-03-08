@@ -1,7 +1,7 @@
 package com.yufimtsev.guardian
 
 import com.badlogic.gdx.Gdx
-import com.badlogic.gdx.Input
+import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.OrthographicCamera
@@ -34,7 +34,9 @@ import ktx.tiled.layer
 import ktx.tiled.width
 import ktx.tiled.x
 import ktx.tiled.y
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.random.Random
 
 class GameScreen(
     private val refreshRate: Int,
@@ -59,7 +61,7 @@ class GameScreen(
     )
 
     private val mapLoader: TmxMapLoader = TmxMapLoader()
-    private val map: TiledMap by remember { mapLoader.load("worldMap.tmx") }
+    private val map: TiledMap by remember { mapLoader.load("map/worldMap.tmx") }
     private val mapRenderer: LayeredMapRenderer by remember { LayeredMapRenderer(map) }
 
     private val world: World by remember { World(Vector2(0f, -5f), true) }
@@ -86,6 +88,9 @@ class GameScreen(
 
     private val lettuceTexture: Texture by remember { Texture("lettuce.png") }
     private val logTexture: Texture by remember { Texture("log.png") }
+    private val potatoTexture: Texture by remember { Texture("potato.png") }
+    private val potatoSaladTexture: Texture by remember { Texture("potato_salad.png") }
+    private val nothingTexture: Texture by remember { Texture("nothing.png") }
     private val precisionCheck: PrecisionCheck by remember {
         PrecisionCheck(
             { virtualPixelSize },
@@ -103,15 +108,32 @@ class GameScreen(
         )
     }
 
-    private val textDrawer: TextDrawer by remember { TextDrawer() }
+    private val characterTextDrawer: TextDrawer by remember { TextDrawer() }
 
     private val chompSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("chomp.wav")) }
     private val crashSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("crash.wav")) }
+
+    private val finalPhrases = listOf(
+        "NICE DRAGON STEW",
+        "BUT THE PLACE IS A MESS",
+        "TOMORROW WILL BE A BUSY DAY\nCLEANING UP ALL OF THIS",
+        "NICE STARRY NIGHT",
+        "IT'S CALM, FINALLY",
+        "NICE",
+        "WHY DO I HAVE A HOUSE\nMADE OF WOODEN BRICKS",
+    )
+
+    private var doorStartX: Float = 0f
+    private var doorEndX: Float = 0f
 
     init {
         map.forEachRectangle("block", world::addBlock)
         // TODO: correct this
         map.forEachRectangle("water", world::addBlock)
+        map.forEachRectangle("door") {
+            doorStartX = it.x.units
+            doorEndX = (it.x + it.width).units
+        }
         camera.position.y = player.body.position.y + 48f.units
     }
 
@@ -121,7 +143,7 @@ class GameScreen(
 
     private fun showText(text: String) {
         textToShow = text.split("\n")
-        textCountdown = 5f
+        characterTextCountdown = 5f
     }
 
     private fun showLogPowerCheck(appearing: Boolean = true, powerForFixedPosition: Float, count: Int = 3) {
@@ -184,8 +206,62 @@ class GameScreen(
         }
     }
 
-    private var textCountdown: Float = 0f
+    private fun showPotatoPowerCheck(appearing: Boolean = true, count: Int = 3) {
+        precisionCheck.show(
+            potatoTexture,
+            target = 0.9f,
+            speed = 3f,
+            disappearIn = 1f,
+            isVertical = true,
+            powerForFixedPosition = -10f,
+            showGuide = false,
+            appearing = appearing,
+        ) { position, delta ->
+            if (count > 1) {
+                showPotatoPowerCheck(appearing = false, count = count - 1)
+            } else {
+                showText("NICE POTATO")
+            }
+        }
+    }
+
+    private fun showDuckHunt() {
+        precisionCheck.show(
+            null,
+            target = 0.6f,
+            speed = 5f,
+            disappearIn = 0f,
+            isVertical = true,
+            showGuide = true,
+            appearing = false,
+            isFullscreen = true,
+        ) { position, delta ->
+            showText("NICE DUCK")
+        }
+    }
+
+    private fun showCookingPotatoSalad(appearing: Boolean = true, count: Int = 8) {
+        precisionCheck.show(
+            potatoSaladTexture,
+            target = Random.nextFloat() * 2f - 1f,
+            speed = 6f,
+            isVertical = count % 2 > 0,
+            showGuide = true,
+            appearing = appearing,
+            disappearIn = if (count == 0) 1f else 0f
+        ) { position, delta ->
+            if (count > 0) {
+                showCookingPotatoSalad(appearing = false, count = count - 1)
+            } else {
+                showText("NICE POTATO SALAD")
+            }
+        }
+    }
+
+    private var characterTextCountdown: Float = 0f
     private var textToShow: List<String> = listOf("")
+    private var indoorFog = 0f
+    private var outdoorFog = 1f
 
     override fun render(delta: Float) {
         // send update signals
@@ -212,25 +288,43 @@ class GameScreen(
         shapeRenderer.use(ShapeRenderer.ShapeType.Filled, camera) {
             it.rect(0f, 0f, VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
         }
-        mapRenderer.renderBackground(camera)
+        if (player.body.position.x < doorEndX) {
+            if (indoorFog > 0f) {
+                indoorFog = max(0f, indoorFog - delta * 5f)
+            }
+        } else {
+            if (indoorFog < 1f) {
+                indoorFog = min(1f, indoorFog + delta * 5f)
+            }
+        }
+        if (player.body.position.x > doorStartX) {
+            if (outdoorFog > 0f) {
+                outdoorFog = max(0f, outdoorFog - delta * 5f)
+            }
+        } else {
+            if (outdoorFog < 1f) {
+                outdoorFog = min(1f, outdoorFog + delta * 5f)
+            }
+        }
+        mapRenderer.renderBackground(camera, indoorFog, outdoorFog)
         batch.use(camera) { player.draw(it) }
-        mapRenderer.renderForeground(camera)
+        mapRenderer.renderForeground(camera, indoorFog, outdoorFog)
         if (enableDebugRender) {
             box2dRenderer.render(world, camera.combined)
         }
 
-        if (textCountdown > 0f) {
-            textCountdown -= delta
-            textDrawer.draw(
+        if (characterTextCountdown > 0f) {
+            characterTextCountdown -= delta
+            characterTextDrawer.draw(
                 batch,
                 camera,
                 textToShow,
                 player.body.position.x,
                 player.body.position.y
             )
-            if (textCountdown <= 0f) {
-                textCountdown = 0f
-                textDrawer.clear()
+            if (characterTextCountdown <= 0f) {
+                characterTextCountdown = 0f
+                characterTextDrawer.clear()
             }
         }
 
@@ -240,14 +334,13 @@ class GameScreen(
 
     override fun keyDown(keycode: Int): Boolean {
         // TODO: send signals to player
-        if (keycode == Input.Keys.F) {
-            toggleFullScreen()
-        }
-        if (keycode == Input.Keys.Z) {
-            showLettuceCheck()
-        }
-        if (keycode == Input.Keys.X) {
-            showLogPrecisionCheck()
+        when (keycode) {
+            Keys.F -> toggleFullScreen()
+            Keys.Z -> showLettuceCheck()
+            Keys.X -> showLogPrecisionCheck()
+            Keys.H -> showDuckHunt()
+            Keys.P -> showPotatoPowerCheck()
+            Keys.Q -> showCookingPotatoSalad()
         }
         precisionCheck.processKeyDown(keycode)
         hud.processKeyDown(keycode)

@@ -19,7 +19,10 @@ class LayeredMapRenderer(private val map: TiledMap): Disposing by Self() {
         "background-p1",
         "background",
         "foreground",
-        "foreground-p1",
+        "foreground-p1-trans",
+        "foreground-p1-solid",
+        "foreground-indoor-fog",
+        "foreground-outdoor-fog",
     )
     private val layerColors = mapOf(
         "background-p3" to Color(0.3f, 0.3f, 0.3f, 1f),
@@ -27,7 +30,10 @@ class LayeredMapRenderer(private val map: TiledMap): Disposing by Self() {
         "background-p1" to Color(0.8f, 0.8f, 0.8f, 1f),
         "background" to Color(1f, 1f, 1f, 1f),
         "foreground" to Color(1f, 1f, 1f, 1f),
-        "foreground-p1" to Color(0.5f, 0.5f, 0f, 1f),
+        "foreground-p1-trans" to Color(1f, 1f, 1f, 0.5f),
+        "foreground-p1-solid" to Color(1f, 1f, 1f, 1f),
+        "foreground-indoor-fog" to Color(1f, 1f, 1f, 1f),
+        "foreground-outdoor-fog" to Color(1f, 1f, 1f, 1f),
     )
     private val layerParallax = mutableMapOf<String, Pair<Float, Float>>()
     private val spriteBatch: SpriteBatch by remember { SpriteBatch() }
@@ -46,15 +52,15 @@ class LayeredMapRenderer(private val map: TiledMap): Disposing by Self() {
         }
     }
 
-    fun renderBackground(camera: OrthographicCamera) {
-        render(camera, "background")
+    fun renderBackground(camera: OrthographicCamera, indoorFog: Float, outdoorFog: Float) {
+        render(camera, "background", indoorFog, outdoorFog)
     }
 
-    fun renderForeground(camera: OrthographicCamera) {
-        render(camera, "foreground")
+    fun renderForeground(camera: OrthographicCamera, indoorFog: Float, outdoorFog: Float) {
+        render(camera, "foreground", indoorFog, outdoorFog)
     }
 
-    private fun render(camera: OrthographicCamera, prefix: String) {
+    private fun render(camera: OrthographicCamera, prefix: String, indoorFog: Float, outdoorFog: Float) {
         val previousCameraX = camera.position.x
         val previousCameraY = camera.position.y
         layerOrder.filter { it.startsWith(prefix) }.forEach {
@@ -64,6 +70,11 @@ class LayeredMapRenderer(private val map: TiledMap): Disposing by Self() {
             camera.position.y = ((previousCameraY.pixels - 960f.units) * parallax.second + 960f.units).pixels
             camera.update()
             spriteBatch.color = layerColors[it]
+            if (it.endsWith("indoor-fog")) {
+                spriteBatch.color.a = indoorFog
+            } else if (it.endsWith("outdoor-fog")) {
+                spriteBatch.color.a = outdoorFog
+            }
 
             val layerToRender = map.layer(it)
             layerToRender.isVisible = true

@@ -29,7 +29,7 @@ Micro-games so far:
 * hit-a-duck
 * climb up
 
-# Diary, 9 more days to go
+# Diary, 5 more days to go
 
 Day 1 (friday, day-off, full throttle):
 * created a dummy world map out of dummy tiles
@@ -40,7 +40,7 @@ Day 1 (friday, day-off, full throttle):
 * tested out TeaVM packaging to itch.io
 * planned some next steps
 
-Day 4 (after saturday, sunday and monday, much less time):
+Days 2, 3, 4 (saturday, sunday and monday, much less time):
 * implement precision check
 * implement power check
 * implement wood cutter
@@ -49,38 +49,64 @@ Day 4 (after saturday, sunday and monday, much less time):
 
 # Plan
 
-
-Day 5 (tuesday, workday):
+Days 5, 6 (tuesday, wednesday, workdays):
 * sounds for wood splitting
 * animated waterfall
 * tested TeaVM rollout, found a bug with thin lines rendering
 
-Hanging:
-* implement potato puller
-* implement cooking of potato salad
+Day 7 (thursday, workday):
+* simplified and fixed text drawing
+* fixed precision check for webgl
+* shrunk the world map
+* implemented potato puller
+* implemented cooking of potato salad
+* implemented indoor/outdoor effect
+* started implementing the duck hunt
+* added GPLv3 license
+
+Day 8 plan (friday, workday)
 * place activities on the level
+* work out the Lost Woods + indoor/outdoor effect
+* wood cutting
+* duck hunt
+  * arrow physics
+  * collisions
+  * item picking
+  * item arts
+* apple picking (ditch that?) 
 
-Known issues:
-* webgl does not render guidelines in precision check
+Day 9, 10 plan (saturday, sunday, weekend)
+* night sequence activities
+* night sequence animation
+  * test the workflow before committing into it!
+* fire capture
+* world backgrounds
+  * morning / day
+  * evening
+* starry night
+* ending selection (each activity calls setEnding(i))
 
-Day 6 plan (wednesday, workday):
-* start night sequence
-
-Day 7 plan (thursday, workday):
-* continue night sequence
-
-Day 8 plan (friday, workday):
-* finish night sequence
-
-Day 9 plan (saturday):
-* hit-a-duck sequence (super important!)
-
-Day 10 plan (sunday):
+Day 11 plan (monday):
 * music
-* sound effects
-
-Day 11 (monday, workday):
-* art
+  * crickets (intro, night)
+  * morning outdoor
+  * lost woods theme (owls)
+  * evening outdoor
+  * night sequence theme
+  * starry night
+* sound effects (mooore!!!)
+  * lettuce pick
+  * potato pull
+  * salad chop
+  * wood cut
+  * arrow launch
+  * arrow hit
+  * lost woods sounds (howling?)
+  * night sequence sounds (quite a few)
+  * footsteps / falling on rock, soil, grass
+  * water / footsteps in water
+  * roasting a duck
+  * cooking a late dinner
 
 Day 12 (tuesday, workday):
 * testing / fixing

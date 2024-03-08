@@ -36,8 +36,8 @@ fun main() {
         if (isFullscreen) {
             Gdx.graphics.setFullscreenMode(displayMode)
         } else {
-            Gdx.graphics.setWindowedMode(3000, 3000)
+            Gdx.graphics.setWindowedMode(3000, 2000)
         }
     }
-    Lwjgl3Application(GuardianGame(refreshRateLimit.toInt(), toggleFullscreen, true), configuration)
+    Lwjgl3Application(GuardianGame(refreshRateLimit.toInt(), toggleFullscreen, false), configuration)
 }

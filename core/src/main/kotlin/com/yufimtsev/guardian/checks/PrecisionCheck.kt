@@ -6,8 +6,11 @@ import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.utils.viewport.FitViewport
+import com.yufimtsev.guardian.GuardianGame
 import com.yufimtsev.guardian.GuardianGame.Companion.CHECK_VIRTUAL_HEIGHT
 import com.yufimtsev.guardian.GuardianGame.Companion.CHECK_VIRTUAL_WIDTH
+import com.yufimtsev.guardian.GuardianGame.Companion.VIRTUAL_HEIGHT
+import com.yufimtsev.guardian.GuardianGame.Companion.VIRTUAL_WIDTH
 import com.yufimtsev.guardian.disposing.Disposing
 import com.yufimtsev.guardian.disposing.Self
 import com.yufimtsev.guardian.utils.pixels
@@ -27,7 +30,7 @@ class PrecisionCheck(
     private val renderer: ShapeRenderer by remember { ShapeRenderer() }
     private val spriteBatch: SpriteBatch by remember { SpriteBatch() }
     private val camera = OrthographicCamera()
-    private val viewport = FitViewport(
+    private var viewport = FitViewport(
         CHECK_VIRTUAL_WIDTH.units,
         CHECK_VIRTUAL_HEIGHT.units,
         camera
@@ -49,8 +52,12 @@ class PrecisionCheck(
     private var speed: Float = 5f
     private var target: Float = 0f
     private var texture: Texture? = null
-    private var onActionCallback: (position: Float, delta: Float) -> Unit = {_, _ -> }
-    private var onFinishCallback: (position: Float, delta: Float) -> Unit = {_, _ -> }
+    private var onActionCallback: (position: Float, delta: Float) -> Unit = { _, _ -> }
+    private var onFinishCallback: (position: Float, delta: Float) -> Unit = { _, _ -> }
+    private var isFullscreen = false
+    private var tint: Float = 0f
+    private var progress: Float = 0f
+    private var timeLimit: Float = 0f
 
     private val powerTexture: Texture by remember { Texture("power.png") }
 
@@ -102,11 +109,13 @@ class PrecisionCheck(
         viewport.apply()
         val worldWidth = viewport.worldWidth
         val worldHeight = viewport.worldHeight
-        val offsetX = (CHECK_VIRTUAL_WIDTH.units - worldWidth) / 2f
-        val offsetY = (CHECK_VIRTUAL_HEIGHT.units - worldHeight) / 2f
-        renderer.use(ShapeRenderer.ShapeType.Filled, camera) {
-            it.setColor(0f, 0f, 0f, 1f)
-            it.rect(offsetX.pixels, offsetY.pixels, worldWidth.pixels, worldHeight.pixels)
+        val offsetX = (maxWidth.units - worldWidth) / 2f
+        val offsetY = (maxHeight.units - worldHeight) / 2f
+        if (!isFullscreen) {
+            renderer.use(ShapeRenderer.ShapeType.Filled, camera) {
+                it.setColor(0f, 0f, 0f, 1f)
+                it.rect(offsetX.pixels, offsetY.pixels, worldWidth.pixels, worldHeight.pixels)
+            }
         }
         val texture = texture
         if (texture != null) {
@@ -120,16 +129,16 @@ class PrecisionCheck(
                     it.setColor(0.5f, 1f, 0.5f, 1f)
                     val xPosition = if (isVertical) worldWidth * (1f + target) / 2 else 0f
                     val yPosition = if (isVertical) 0f else worldHeight * (1f + target) / 2
-                    val rectWidth = if (isVertical) 1f.units else worldWidth
-                    val rectHeight = if (isVertical) worldHeight else 1f.units
+                    val rectWidth = if (isVertical) 2f.units else worldWidth
+                    val rectHeight = if (isVertical) worldHeight else 2f.units
                     it.rect(xPosition.pixels, yPosition.pixels, rectWidth.pixels, rectHeight.pixels)
                 }
                 val currentPosition = powerForFixedPosition ?: position
                 it.setColor(1f, 1f, 1f, 1f)
                 val xPosition = if (isVertical) worldWidth * (1f + currentPosition) / 2 else 0f
                 val yPosition = if (isVertical) 0f else worldHeight * (1f + currentPosition) / 2
-                val rectWidth = if (isVertical) 1f.units else worldWidth
-                val rectHeight = if (isVertical) worldHeight else 1f.units
+                val rectWidth = if (isVertical) 2f.units else worldWidth
+                val rectHeight = if (isVertical) worldHeight else 2f.units
                 it.rect(xPosition.pixels, yPosition.pixels, rectWidth.pixels, rectHeight.pixels)
             }
             if (powerForFixedPosition != null) {
@@ -154,16 +163,20 @@ class PrecisionCheck(
     }
 
     fun show(
-        texture: Texture,
+        texture: Texture?,
         target: Float,
         isVertical: Boolean,
-        powerForFixedPosition: Float?,
+        powerForFixedPosition: Float? = null,
         speed: Float = 5f,
         disappearIn: Float = SECONDS_TO_DISAPPEAR,
         showGuide: Boolean = false,
         appearing: Boolean = false,
-        onActionCallback: (Float, Float) -> Unit = {_, _ -> },
-        onFinishCallback: (Float, Float) -> Unit = {_, _ -> },
+        isFullscreen: Boolean = false,
+        tint: Float = 0f,
+        progress: Float = 0f,
+        timeLimit: Float = -1f,
+        onActionCallback: (Float, Float) -> Unit = { _, _ -> },
+        onFinishCallback: (Float, Float) -> Unit = { _, _ -> },
     ) {
         this.texture = texture
         this.target = target
@@ -174,19 +187,32 @@ class PrecisionCheck(
         this.onFinishCallback = onFinishCallback
         this.speed = speed
         this.disappearIn = disappearIn
+        this.isFullscreen = isFullscreen
+        this.tint = tint
+        this.progress = progress
+        this.timeLimit = timeLimit
         timer = 0f
         fixedOnPosition = null
         this.showGuide = showGuide
+        viewport = FitViewport(
+            maxWidth.units,
+            maxHeight.units,
+            camera
+        )
         showing = true
     }
 
+
+    private val maxWidth get() = if (isFullscreen) VIRTUAL_WIDTH else CHECK_VIRTUAL_WIDTH
+    private val maxHeight get() = if (isFullscreen) VIRTUAL_HEIGHT else CHECK_VIRTUAL_HEIGHT
+
     private fun updateViewport(fraction: Float) {
-        val width = (CHECK_VIRTUAL_WIDTH * fraction)
-        val height = (CHECK_VIRTUAL_HEIGHT * fraction)
+        val width = (maxWidth * fraction)
+        val height = (maxHeight * fraction)
         with(viewport) {
             val virtualPixelSize = virtualPixelSize()
             val x = ((screenWidth() - width * virtualPixelSize) / 2).pixels.toInt()
-            val y = (CHECK_VIRTUAL_HEIGHT.units - height).pixels.toInt() / 2 + 63 + (64 * fraction).toInt()
+            val y = (maxHeight.units - height).pixels.toInt() / 2 + 63 + (64 * fraction).toInt()
             val w = width.pixels.toInt()
             val h = height.pixels.toInt()
             setScreenBounds(
