@@ -2,6 +2,7 @@ package com.yufimtsev.guardian.player
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
+import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
 import com.badlogic.gdx.graphics.g2d.Sprite
@@ -12,6 +13,7 @@ import com.badlogic.gdx.physics.box2d.BodyDef
 import com.badlogic.gdx.physics.box2d.CircleShape
 import com.badlogic.gdx.physics.box2d.FixtureDef
 import com.badlogic.gdx.physics.box2d.World
+import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_RUNNING_VELOCITY
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_VELOCITY
 import com.yufimtsev.guardian.GuardianGame.Companion.PLAYER_ACCELERATION
 import com.yufimtsev.guardian.disposing.Disposing
@@ -62,13 +64,15 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
 
     private fun handleInput() {
         // TODO: switch to event-based handling
-        if (Gdx.input.isKeyJustPressed(Input.Keys.UP)) {
+        val holdingShift = Gdx.input.isKeyPressed(Keys.SHIFT_LEFT)
+        if (Gdx.input.isKeyJustPressed(Keys.UP) && body.linearVelocity.y == 0f) {
             body.applyLinearImpulse(Vector2(0f, 2f), body.worldCenter, true)
         }
-        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT) && body.linearVelocity.x <= MAX_PLAYER_VELOCITY) {
+        val maxVelocity = if (holdingShift) MAX_PLAYER_RUNNING_VELOCITY else MAX_PLAYER_VELOCITY
+        if (Gdx.input.isKeyPressed(Keys.RIGHT) && body.linearVelocity.x <= maxVelocity) {
             body.applyLinearImpulse(Vector2(PLAYER_ACCELERATION, 0f), body.worldCenter, true)
         }
-        if (Gdx.input.isKeyPressed(Input.Keys.LEFT) && body.linearVelocity.x >= -MAX_PLAYER_VELOCITY) {
+        if (Gdx.input.isKeyPressed(Keys.LEFT) && body.linearVelocity.x >= -maxVelocity) {
             body.applyLinearImpulse(Vector2(-PLAYER_ACCELERATION, 0f), body.worldCenter, true)
         }
     }
@@ -88,7 +92,7 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
             result.flip(true, false)
         }
 
-        stateTime = if (currentState == previousState) stateTime + delta else 0f
+        stateTime = if (currentState == previousState) stateTime + delta * Math.abs(body.linearVelocity.x) else 0f
         previousState = currentState
 
         return result

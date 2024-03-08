@@ -29,7 +29,7 @@ Micro-games so far:
 * hit-a-duck
 * climb up
 
-# Diary
+# Diary, 9 more days to go
 
 Day 1 (friday, day-off, full throttle):
 * created a dummy world map out of dummy tiles
@@ -40,44 +40,49 @@ Day 1 (friday, day-off, full throttle):
 * tested out TeaVM packaging to itch.io
 * planned some next steps
 
-Day 2 plan (saturday):
+Day 4 (after saturday, sunday and monday, much less time):
 * implement precision check
 * implement power check
-* implement potato puller and lettuce cutter
 * implement wood cutter
-
-Day 3 plan (sunday):
-* implement cooking (how???)
+* implement lettuce cutter
 * implement simple text thought bubble, add some contextual thoughts ("ok, one more time" when failed power check)
-* implement first run-and-jump sequence
 
-Day 4 plan (monday, workday):
-* start working on hit-a-duck
+# Plan
 
 Day 5 plan (tuesday, workday):
-* finish working on hit-a-duck
+* implement potato puller
+* implement cooking of potato salad
+* place activities on the level
 
 Day 6 plan (wednesday, workday):
-* implement woodcutting
+* start night sequence
 
 Day 7 plan (thursday, workday):
-* implement second run-and-jump sequence with dodging
+* continue night sequence
 
 Day 8 plan (friday, workday):
-* implement wall climbing (how??)
+* finish night sequence
 
 Day 9 plan (saturday):
-* night sequence
-* chicken
+* hit-a-duck sequence (super important!)
 
 Day 10 plan (sunday):
-* chicken
-
-Day 11 plan (monday):
 * music
-
-Day 12 plan (tuesday):
 * sound effects
 
-Day 13 plan (wednesday, SUBMISSION):
+Day 11 (monday, workday):
 * art
+
+Day 12 (tuesday, workday):
+* testing / fixing
+
+Day 13 (wednesday, workday):
+* testing / fixing
+* submit!!!
+
+Loose ends:
+* implement first run-and-jump sequence
+* implement second run-and-jump sequence with dodging
+* implement woodcutting
+* implement wall climbing (how??)
+* chicken

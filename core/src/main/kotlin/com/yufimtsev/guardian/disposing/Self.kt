@@ -12,7 +12,6 @@ class Self : Disposing {
         }
 
     override fun dispose() {
-        System.out.println("Disposing $this")
         disposables.forEach { it.dispose() }
     }
 }
