@@ -64,12 +64,12 @@ class PrecisionCheck(
     private val centerDelta: Float?
         get() = fixedOnPosition?.let { Math.abs(target - it) }
 
-    fun processKeyDown(keycode: Int) {
+    fun processKeyDown(keycode: Int): Boolean {
         // ignore input if check is finished
         if (fixedOnPosition != null) {
-            return
+            return false
         }
-        if (keycode == Keys.SPACE) {
+        if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z) {
             val currentPosition = guidePosition
             fixedOnPosition = currentPosition
             timer = 0f
@@ -77,7 +77,9 @@ class PrecisionCheck(
                 actionDifference(it)
                 onActionCallback(currentPosition, it)
             }
+            return true
         }
+        return false
     }
 
     fun updateAndRender(delta: Float) {
@@ -224,6 +226,10 @@ class PrecisionCheck(
             //update(w * virtualPixelSize, h * virtualPixelSize)
             apply(true)
         }
+    }
+
+    fun reset() {
+        showing = false
     }
 
     // in range of -1f..1f

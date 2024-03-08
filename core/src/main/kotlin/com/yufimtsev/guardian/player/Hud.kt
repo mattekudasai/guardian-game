@@ -1,6 +1,5 @@
 package com.yufimtsev.guardian.player
 
-import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
@@ -21,13 +20,11 @@ class Hud(
     private val virtualPixelSize: () -> Int
 ) : Disposing by Self() {
 
-    private var stamina = 1f
-    private var hunger = 0.5f //
+    var stamina = 0.5f
+        private set
 
     private var staminaIncreasedCountdown = 0f
     private var staminaDecreasedCountdown = 0f
-    private var hungerIncreasedCountdown = 0f
-    private var hungerDecreasedCountdown = 0f
     private var nothingHappensTimer = 0f
 
     private val renderer: ShapeRenderer by remember { ShapeRenderer() }
@@ -38,36 +35,34 @@ class Hud(
         camera
     )
 
-    val colorRed = Color.RED
-    val colorBlue = Color.BLUE
-    val colorDarkBlue = Color.NAVY
-    val colorGreen = Color.GREEN
-    val colorWhite = Color.WHITE
-    val colorDarkWhite = Color.GRAY
+    private val colorRed = Color.RED
+    private val colorGreen = Color.GREEN
+    private val colorWhite = Color.WHITE
+    private val colorGray = Color.GRAY
 
     fun processKeyDown(keycode: Int) {
-        if (keycode == Keys.C) {
-            increaseHunger(0.3f)
-        }
     }
 
-    fun update(delta: Float) {
+    var negativeEffectAcceleration: Float = 0f
+
+    fun update(delta: Float, isPlayerInWater: Boolean, isPlayerInLostWoods: Boolean) {
         if (staminaDecreasedCountdown > 0f) {
             staminaDecreasedCountdown -= delta
         }
         if (staminaIncreasedCountdown > 0f) {
             staminaIncreasedCountdown -= delta
         }
-        if (hungerDecreasedCountdown > 0f) {
-            hungerDecreasedCountdown -= delta
-        }
-        if (hungerIncreasedCountdown > 0f) {
-            hungerIncreasedCountdown -= delta
-        }
         nothingHappensTimer += delta
-        if (nothingHappensTimer > HUNGER_DECREASE_PERIOD_SECONDS) {
-            decreaseHunger(HUNGER_DECREASE_RATE)
+        if (nothingHappensTimer > STAMINA_DECREASE_PERIOD_SECONDS) {
+            val hungerDecreaseRate = STAMINA_DECREASE_RATE
+            decreaseStamina(hungerDecreaseRate)
             nothingHappensTimer = 0f
+        }
+        if (isPlayerInWater || isPlayerInLostWoods) {
+            negativeEffectAcceleration += if (isPlayerInWater) 0.00001f else 0.000001f
+            decreaseStamina(negativeEffectAcceleration)
+        } else {
+            negativeEffectAcceleration = 0f
         }
     }
 
@@ -78,14 +73,6 @@ class Hud(
             colorGreen
         } else {
             colorWhite
-        }
-
-        val hungerColor = if (hungerDecreasedCountdown > 0f) {
-            colorRed
-        } else if (hungerIncreasedCountdown > 0f) {
-            colorGreen
-        } else {
-            colorBlue
         }
         viewport.setScreenBounds(
             virtualScreenOffsetX(),
@@ -99,19 +86,11 @@ class Hud(
             it.rect(0f, 0f, VIRTUAL_WIDTH.units, HUD_VIRTUAL_HEIGHT.units)
             it.drawTwoRects(
                 1f,
-                VIRTUAL_WIDTH / 2f,
+                VIRTUAL_WIDTH,
                 2f,
                 stamina,
                 staminaColor,
-                colorDarkWhite
-            )
-            it.drawTwoRects(
-                VIRTUAL_WIDTH / 2f,
-                VIRTUAL_WIDTH - 1f,
-                2f,
-                hunger,
-                hungerColor,
-                colorDarkWhite
+                colorGray
             )
         }
     }
@@ -140,6 +119,7 @@ class Hud(
     }
 
     fun decreaseStamina(value: Float) {
+        nothingHappensTimer = 0f
         stamina -= value
         if (stamina <= 0f) {
             stamina = 0f
@@ -151,6 +131,7 @@ class Hud(
     }
 
     fun increaseStamina(value: Float) {
+        nothingHappensTimer = 0f
         if (stamina == 1f) {
             return
         }
@@ -162,29 +143,17 @@ class Hud(
         staminaIncreasedCountdown = DEFAULT_COUNTDOWN_SECONDS
     }
 
-    fun decreaseHunger(value: Float) {
-        hunger -= value
-        if (hunger < 0f) {
-            decreaseStamina(-hunger)
-            hunger = 0f
-        } else {
-            increaseStamina(value)
-        }
-        hungerDecreasedCountdown = DEFAULT_COUNTDOWN_SECONDS
-    }
-
-    fun increaseHunger(value: Float) {
-        hunger += value
-        if (hunger > 1f) {
-            increaseStamina(hunger - 1f)
-            hunger = 1f
-        }
-        hungerIncreasedCountdown = DEFAULT_COUNTDOWN_SECONDS
+    fun reset() {
+        stamina = 0.5f
+        nothingHappensTimer = 0f
+        staminaIncreasedCountdown = 0f
+        staminaDecreasedCountdown = 0f
+        nothingHappensTimer = 0f
     }
 
     companion object {
         private const val DEFAULT_COUNTDOWN_SECONDS = 0.3f
-        private const val HUNGER_DECREASE_PERIOD_SECONDS = 4f
-        private const val HUNGER_DECREASE_RATE = 0.05f
+        private const val STAMINA_DECREASE_PERIOD_SECONDS = 4f
+        private const val STAMINA_DECREASE_RATE = 0.05f
     }
 }

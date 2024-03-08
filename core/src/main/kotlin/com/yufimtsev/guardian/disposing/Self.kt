@@ -11,6 +11,9 @@ class Self : Disposing {
             disposable
         }
 
+    override fun <T : Disposable> T.autoDisposing(): T =
+        this.also { disposables += it }
+
     override fun dispose() {
         disposables.forEach { it.dispose() }
     }

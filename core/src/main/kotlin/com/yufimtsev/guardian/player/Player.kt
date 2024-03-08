@@ -1,7 +1,6 @@
 package com.yufimtsev.guardian.player
 
 import com.badlogic.gdx.Gdx
-import com.badlogic.gdx.Input
 import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
@@ -10,7 +9,6 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.physics.box2d.Body
 import com.badlogic.gdx.physics.box2d.BodyDef
-import com.badlogic.gdx.physics.box2d.CircleShape
 import com.badlogic.gdx.physics.box2d.FixtureDef
 import com.badlogic.gdx.physics.box2d.PolygonShape
 import com.badlogic.gdx.physics.box2d.World
@@ -36,7 +34,7 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
         createFixture(FixtureDef().apply {
             shape = PolygonShape().apply {
                 setAsBox(
-                    4f.units,
+                    3f.units,
                     8f.units
                 )
             }
@@ -63,23 +61,32 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
         setRegion(idleTexture)
     }
 
-    fun update(delta: Float) {
-        handleInput()
+    fun update(delta: Float, isInWater: Boolean) {
+        handleInput(isInWater)
         setPosition((body.position.x - width / 2).pixels, (body.position.y - height / 2).pixels)
         setRegion(getFrame(delta))
     }
 
-    private fun handleInput() {
+    private fun handleInput(isInWater: Boolean) {
         // TODO: switch to event-based handling
-        val holdingShift = Gdx.input.isKeyPressed(Keys.SHIFT_LEFT)
-        if (Gdx.input.isKeyJustPressed(Keys.UP) && body.linearVelocity.y == 0f) {
-            body.applyLinearImpulse(Vector2(0f, 2f), body.worldCenter, true)
+        val holdingShift =
+            Gdx.input.isKeyPressed(Keys.SHIFT_LEFT) ||
+                Gdx.input.isKeyPressed(Keys.SHIFT_RIGHT) ||
+                Gdx.input.isKeyPressed(Keys.SPACE) ||
+                Gdx.input.isKeyPressed(Keys.K) ||
+                Gdx.input.isKeyPressed(Keys.Z)
+        if ((Gdx.input.isKeyJustPressed(Keys.UP) || Gdx.input.isKeyPressed(Keys.W) || Gdx.input.isKeyPressed(Keys.J) || Gdx.input.isKeyPressed(
+                Keys.X
+            )) && body.linearVelocity.y == 0f
+        ) {
+            body.applyLinearImpulse(Vector2(0f, if (isInWater) 1f else 2f), body.worldCenter, true)
         }
         val maxVelocity = if (holdingShift) MAX_PLAYER_RUNNING_VELOCITY else MAX_PLAYER_VELOCITY
-        if (Gdx.input.isKeyPressed(Keys.RIGHT) && body.linearVelocity.x <= maxVelocity) {
+        val realMaxVelocity = if (isInWater) maxVelocity / 2f else maxVelocity
+        if ((Gdx.input.isKeyPressed(Keys.RIGHT) || Gdx.input.isKeyPressed(Keys.D)) && body.linearVelocity.x <= realMaxVelocity) {
             body.applyLinearImpulse(Vector2(PLAYER_ACCELERATION, 0f), body.worldCenter, true)
         }
-        if (Gdx.input.isKeyPressed(Keys.LEFT) && body.linearVelocity.x >= -maxVelocity) {
+        if ((Gdx.input.isKeyPressed(Keys.LEFT) || Gdx.input.isKeyPressed(Keys.A)) && body.linearVelocity.x >= -realMaxVelocity) {
             body.applyLinearImpulse(Vector2(-PLAYER_ACCELERATION, 0f), body.worldCenter, true)
         }
     }

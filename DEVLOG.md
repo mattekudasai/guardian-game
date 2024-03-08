@@ -64,16 +64,17 @@ Day 7 (thursday, workday):
 * started implementing the duck hunt
 * added GPLv3 license
 
-Day 8 plan (friday, workday)
-* place activities on the level
-* work out the Lost Woods + indoor/outdoor effect
+Day 8 (friday, workday):
+* drafted lost woods with indoor effect
+* placed activities on the level, although did not code them
+* implemented endings framework and game restart
+* implemented title screen
+* implemented different control schemes
+
+Hanging stuff:
+* code activity triggers on the level
+* simplified duck hunt (precise check simulating light gun)
 * wood cutting
-* duck hunt
-  * arrow physics
-  * collisions
-  * item picking
-  * item arts
-* apple picking (ditch that?) 
 
 Day 9, 10 plan (saturday, sunday, weekend)
 * night sequence activities

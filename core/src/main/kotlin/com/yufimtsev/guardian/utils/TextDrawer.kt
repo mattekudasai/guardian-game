@@ -10,9 +10,9 @@ import com.yufimtsev.guardian.disposing.Disposing
 import com.yufimtsev.guardian.disposing.Self
 import ktx.graphics.use
 
-class TextDrawer : Disposing by Self() {
+class TextDrawer(fontFileName: String, private val backgroundColor: Color) : Disposing by Self() {
 
-    private val font: Texture by remember { Texture("font.png") }
+    private val font: Texture by remember { Texture(fontFileName) }
     private val letters = mutableMapOf<Char, TextureRegion>().apply {
         var index = 0
         fun putRegion(key: Char) = put(key, TextureRegion(font, (index++) * 6, 0, 7, 9))
@@ -20,6 +20,7 @@ class TextDrawer : Disposing by Self() {
         putRegion('.')
         putRegion(',')
         putRegion('\'')
+        ('0'..'9').forEach(::putRegion)
     }
     private val shapeRenderer: ShapeRenderer by remember { ShapeRenderer() }
 
@@ -31,14 +32,21 @@ class TextDrawer : Disposing by Self() {
         lastY = 0f
     }
 
-    fun draw(batch: SpriteBatch, camera: OrthographicCamera, text: List<String>, x: Float, y: Float) {
-        if (lastX == 0f && lastY == 0f) {
+    fun draw(
+        batch: SpriteBatch,
+        camera: OrthographicCamera,
+        text: List<String>,
+        x: Float,
+        y: Float,
+        ignoreLastPosition: Boolean = false
+    ) {
+        if (ignoreLastPosition || lastX == 0f && lastY == 0f) {
             lastX = x
             lastY = y
         }
         val maxTextLength = text.maxOf { it.length }
         shapeRenderer.use(ShapeRenderer.ShapeType.Filled, camera) {
-            it.color = Color.WHITE
+            it.color = backgroundColor
             it.rect(
                 lastX.pixels,
                 (lastY + 1f.units).pixels,
