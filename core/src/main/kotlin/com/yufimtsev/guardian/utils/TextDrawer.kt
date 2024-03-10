@@ -26,6 +26,7 @@ class TextDrawer(fontFileName: String, private val backgroundColor: Color) : Dis
 
     private var lastX: Float = 0f
     private var lastY: Float = 0f
+    private var lastText: List<String>? = null
 
     fun clear() {
         lastX = 0f
@@ -40,9 +41,10 @@ class TextDrawer(fontFileName: String, private val backgroundColor: Color) : Dis
         y: Float,
         ignoreLastPosition: Boolean = false
     ) {
-        if (ignoreLastPosition || lastX == 0f && lastY == 0f) {
+        if (ignoreLastPosition || lastX == 0f && lastY == 0f || !text.equals(lastText)) {
             lastX = x
             lastY = y
+            lastText = text
         }
         val maxTextLength = text.maxOf { it.length }
         shapeRenderer.use(ShapeRenderer.ShapeType.Filled, camera) {

@@ -12,14 +12,19 @@ import com.badlogic.gdx.physics.box2d.BodyDef
 import com.badlogic.gdx.physics.box2d.FixtureDef
 import com.badlogic.gdx.physics.box2d.PolygonShape
 import com.badlogic.gdx.physics.box2d.World
+import com.yufimtsev.guardian.GuardianGame.Companion.BLOCK_BIT
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_RUNNING_VELOCITY
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_VELOCITY
+import com.yufimtsev.guardian.GuardianGame.Companion.NIGHT_BIT
+import com.yufimtsev.guardian.GuardianGame.Companion.NIGHT_CRASH_BIT
 import com.yufimtsev.guardian.GuardianGame.Companion.PLAYER_ACCELERATION
+import com.yufimtsev.guardian.GuardianGame.Companion.PLAYER_BIT
 import com.yufimtsev.guardian.disposing.Disposing
 import com.yufimtsev.guardian.disposing.Self
 import com.yufimtsev.guardian.utils.pixels
 import com.yufimtsev.guardian.utils.units
 import ktx.collections.GdxArray
+import kotlin.experimental.or
 
 class Player(world: World, texture: Texture, private val spawnPosition: Vector2) :
     Sprite(texture), Disposing by Self() {
@@ -42,7 +47,11 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
                 radius = 8f.units
             }*/
             friction = 0.8f
-        })
+            filter.categoryBits = PLAYER_BIT
+            filter.maskBits = NIGHT_BIT or BLOCK_BIT or NIGHT_CRASH_BIT
+        }).apply {
+            userData = this@Player
+        }
     }
 
     private val currentState: State
@@ -67,6 +76,8 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
         setRegion(getFrame(delta))
     }
 
+    private var jumped: Boolean = false
+
     private fun handleInput(isInWater: Boolean) {
         // TODO: switch to event-based handling
         val holdingShift =
@@ -75,11 +86,20 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
                 Gdx.input.isKeyPressed(Keys.SPACE) ||
                 Gdx.input.isKeyPressed(Keys.K) ||
                 Gdx.input.isKeyPressed(Keys.Z)
-        if ((Gdx.input.isKeyJustPressed(Keys.UP) || Gdx.input.isKeyPressed(Keys.W) || Gdx.input.isKeyPressed(Keys.J) || Gdx.input.isKeyPressed(
+        if ((Gdx.input.isKeyJustPressed(Keys.UP) || Gdx.input.isKeyJustPressed(Keys.W) || Gdx.input.isKeyJustPressed(
+                Keys.J
+            ) || Gdx.input.isKeyJustPressed(
                 Keys.X
-            )) && body.linearVelocity.y == 0f
+            )) && body.linearVelocity.y == 0f && !jumped
         ) {
+            jumped = true
             body.applyLinearImpulse(Vector2(0f, if (isInWater) 1f else 2f), body.worldCenter, true)
+        }
+        if (jumped && !(Gdx.input.isKeyPressed(Keys.UP) || Gdx.input.isKeyPressed(Keys.W) || Gdx.input.isKeyPressed(Keys.J) || Gdx.input.isKeyPressed(
+                Keys.X
+            ))
+        ) {
+            jumped = false
         }
         val maxVelocity = if (holdingShift) MAX_PLAYER_RUNNING_VELOCITY else MAX_PLAYER_VELOCITY
         val realMaxVelocity = if (isInWater) maxVelocity / 2f else maxVelocity

@@ -25,7 +25,12 @@ import com.yufimtsev.guardian.player.Player
 import com.yufimtsev.guardian.utils.TextDrawer
 import com.yufimtsev.guardian.utils.pixels
 import com.yufimtsev.guardian.utils.units
+import com.yufimtsev.guardian.world.Activity
 import com.yufimtsev.guardian.world.LayeredMapRenderer
+import com.yufimtsev.guardian.world.Night
+import com.yufimtsev.guardian.world.TopWood
+import com.yufimtsev.guardian.world.Tree
+import com.yufimtsev.guardian.world.WorldContactListener
 import com.yufimtsev.guardian.world.addBlock
 import com.yufimtsev.guardian.world.forEachRectangle
 import ktx.app.KtxInputAdapter
@@ -71,7 +76,14 @@ class GameScreen(
     private val box2dRenderer: Box2DDebugRenderer by remember { Box2DDebugRenderer() }
 
     private val playerTexture: Texture by remember { Texture("character.png") }
-    private var player: Player = createPlayer()
+    private var player: Player = createPlayer()/* by remember { Player(world, playerTexture, spawnPosition = map.layer("player-spawn").objects.get(0).let {
+        Vector2(it.x + it.width / 2f, it.y + it.height / 2f)
+    }) }*/
+
+    private var night: Night? = null
+    private fun createNight() = Night(world, spawnPosition = map.layer("night-spawn").objects.get(0).let {
+        Vector2(it.x + it.width / 2f, it.y + it.height / 2f)
+    }).autoDisposing()
 
     private fun createPlayer(): Player =
         Player(world, playerTexture, spawnPosition = map.layer("player-spawn").objects.get(0).let {
@@ -88,7 +100,9 @@ class GameScreen(
             { screenWidth },
             { virtualScreenOffsetX },
             { virtualScreenOffsetY },
-            { virtualPixelSize })
+            { virtualPixelSize },
+            { ending = Ending.NOTHING_SPECIAL }
+        )
     }
 
     private val lettuceTexture: Texture by remember { Texture("lettuce.png") }
@@ -96,6 +110,7 @@ class GameScreen(
     private val potatoTexture: Texture by remember { Texture("potato.png") }
     private val potatoSaladTexture: Texture by remember { Texture("potato_salad.png") }
     private val nothingTexture: Texture by remember { Texture("nothing.png") }
+    private val markerTexture: Texture by remember { Texture("marker.png") }
     private val precisionCheck: PrecisionCheck by remember {
         PrecisionCheck(
             { virtualPixelSize },
@@ -103,13 +118,14 @@ class GameScreen(
             { screenWidth },
             {
                 println("difference: $it")
-                val threshold = 0.1f
+                val threshold = 0.15f
                 if (it < threshold) {
                     // do nothing, good enough
                 } else {
-                    hud.decreaseStamina((it - threshold) / 5f)
+                    hud.decreaseStamina((it - threshold) / 40f)
                 }
-            }
+            },
+            { activePrecisionCheckEnding = null }
         )
     }
 
@@ -145,6 +161,20 @@ class GameScreen(
     private var ending: Ending = Ending.NOTHING_SPECIAL
     private var activePrecisionCheckEnding: Ending? = null
 
+    private val activities = mutableMapOf<String, Activity>()
+    private var potatoesPulled = 0f
+    private var lettucePicked = 0f
+    private var woodCollected = 0f
+
+    private val smallTreeTexture: Texture by remember { Texture("small_tree.png") }
+    private val mediumTreeTexture: Texture by remember { Texture("medium_tree.png") }
+    private val largeTreeTexture: Texture by remember { Texture("large_tree.png") }
+    private val forestTopTexture: Texture by remember { Texture("forest_top.png") }
+    private val interactiveTrees = mutableMapOf<String, Tree>()
+    private val largeTrees = mutableListOf<Tree>()
+    private val trees = mutableListOf<Tree>()
+    private val topWoods = mutableListOf<TopWood>()
+
     init {
         map.forEachRectangle("block", world::addBlock)
         map.forEachRectangle("door") {
@@ -159,17 +189,77 @@ class GameScreen(
             lostWoodsEndX = (it.x + it.width).units
             lostWoodsWidth = lostWoodsEndX - lostWoodsStartX
         }
-        map.forEachRectangle("potato-pull") {}
-        map.forEachRectangle("lettuce-pick") {}
-        map.forEachRectangle("bed") {}
-        map.forEachRectangle("cooking") {}
-        map.forEachRectangle("wood-split") {}
-        map.forEachRectangle("tree") {}
+        resetActivities()
+        map.forEachRectangle("small-tree") {
+            trees += Tree(smallTreeTexture, it, scaleFactor = 0.3f)
+        }
+        map.forEachRectangle("large-tree") {
+            largeTrees += Tree(largeTreeTexture, it)
+        }
+        map.forEachRectangle("medium-tree") {
+            trees += Tree(mediumTreeTexture, it, scaleFactor = 0.3f)
+        }
         map.forEachRectangle("duck-hunt") {}
         map.forEachRectangle("falling-rocks") {}
         map.forEachRectangle("night-hunt") {}
+        map.forEachRectangle("lost-woods-top") {
+            topWoods += TopWood(forestTopTexture, it)
+        }
         floorY = player.body.position.y
         camera.position.y = player.body.position.y + 48f.units
+        world.setContactListener(WorldContactListener { fatal ->
+            if (fatal) {
+                ending = Ending.NIGHT_CRASH
+                hud.decreaseStamina(1f)
+            } else {
+                ending = Ending.NIGHT
+                hud.decreaseStamina(0.2f)
+            }
+        })
+    }
+
+    private fun resetActivities() {
+        activities.clear()
+        interactiveTrees.clear()
+        map.forEachRectangle("potato-pull") {
+            activities["potato-pull"] =
+                Activity(markerTexture, it) { showPotatoPowerCheck(appearing = true, count = 0) }
+        }
+        map.forEachRectangle("lettuce-pick") {
+            activities["lettuce-pick"] = Activity(markerTexture, it) { showLettuceCheck(appearing = true) }
+        }
+        map.forEachRectangle("bed") {
+            activities["bed"] = Activity(markerTexture, it) { showText("I DON'T WANT TO SLEEP") }
+        }
+        map.forEachRectangle("cooking") {
+            activities["cooking"] = Activity(markerTexture, it) {
+                if (lettucePicked < 3f) {
+                    showText("NEED MORE LETTUCE")
+                } else if (potatoesPulled < 3f) {
+                    showText("NEED MORE POTATOES")
+                } else {
+                    showCookingPotatoSalad(appearing = true, count = 8)
+                }
+            }
+        }
+        map.forEachRectangle("wood-split") {
+            activities["wood-split"] = Activity(markerTexture, it) {
+                if (woodCollected == 0f) {
+                    showText("NOT ENOUGH WOOD")
+                } else {
+                    showLogPrecisionCheck(appearing = true, showGuide = false)
+                }
+            }
+        }
+        var index = 0
+        map.forEachRectangle("tree") {
+            val key = "tree_$index"
+            activities[key] = Activity(markerTexture, it) {
+                showWoodCutter(key, false)
+            }
+            interactiveTrees[key] = Tree(smallTreeTexture, it)
+            index++
+        }
     }
 
     override fun show() {
@@ -178,10 +268,10 @@ class GameScreen(
 
     private fun showText(text: String) {
         textToShow = text.split("\n")
-        characterTextCountdown = 5f
+        characterTextCountdown = 3f
     }
 
-    private fun showLogPowerCheck(appearing: Boolean = true, powerForFixedPosition: Float, count: Int = 3) {
+    private fun showLogPowerCheck(appearing: Boolean = true, powerForFixedPosition: Float, count: Int = 0) {
         activePrecisionCheckEnding = Ending.WOOD_SPLITTING_WINS
         precisionCheck.show(
             logTexture,
@@ -193,24 +283,26 @@ class GameScreen(
             showGuide = false,
             appearing = appearing,
             onActionCallback = { position, delta ->
-                if (delta > 0.5f) {
+                if (true) {
+                    // TODO: return sound when sound is there
+                }else if (delta > 0.5f) {
                     chompSound.play(0.6f)
                 } else {
                     crashSound.play()
                 }
             }) { position, delta ->
             if (delta > 0.5f) {
+                showText("HIT HARDER")
                 showLogPowerCheck(appearing = false, powerForFixedPosition = powerForFixedPosition, count = count)
-            } else if (count > 1) {
-                showLogPrecisionCheck(appearing = false, count = count - 1)
+            } else if (count < 3) {
+                showLogPrecisionCheck(appearing = false, showGuide = count == 2, count = count + 1)
             } else {
-                activePrecisionCheckEnding = null
-                showText("NICE FIREWOOD")
+                showText("GOT FIREWOOD")
             }
         }
     }
 
-    private fun showLogPrecisionCheck(appearing: Boolean = true, count: Int = 3) {
+    private fun showLogPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = true, count: Int = 3) {
         activePrecisionCheckEnding = Ending.WOOD_SPLITTING_WINS
         precisionCheck.show(
             logTexture,
@@ -219,14 +311,14 @@ class GameScreen(
             disappearIn = 0f,
             isVertical = true,
             powerForFixedPosition = null,
-            showGuide = true,
+            showGuide = showGuide,
             appearing = appearing
         ) { position, delta ->
             showLogPowerCheck(appearing = false, powerForFixedPosition = position, count = count)
         }
     }
 
-    private fun showLettuceCheck(appearing: Boolean = true, count: Int = 3) {
+    private fun showLettuceCheck(appearing: Boolean = true, showGuide: Boolean = false, count: Int = 0) {
         activePrecisionCheckEnding = Ending.LETTUCE_WINS
         precisionCheck.show(
             lettuceTexture,
@@ -234,19 +326,23 @@ class GameScreen(
             speed = 6f,
             isVertical = false,
             powerForFixedPosition = null,
-            showGuide = true,
+            showGuide = showGuide,
             appearing = appearing
         ) { position, delta ->
-            if (count > 1) {
-                showLettuceCheck(appearing = false, count = count - 1)
+            lettucePicked += 1f - delta / 2f
+            if (lettucePicked >= 3) {
+                showText("GOT LETTUCE")
+                activities.remove("lettuce-pick")
             } else {
-                activePrecisionCheckEnding = null
-                showText("NICE LETTUCE")
+                if (count == 2 && lettucePicked < 2f) {
+                    showText("PICK THE MOST")
+                }
+                showLettuceCheck(appearing = false, showGuide = count >= 3, count = count + 1)
             }
         }
     }
 
-    private fun showPotatoPowerCheck(appearing: Boolean = true, count: Int = 3) {
+    private fun showPotatoPowerCheck(appearing: Boolean = true, count: Int = 0) {
         activePrecisionCheckEnding = Ending.POTATO_WINS
         precisionCheck.show(
             potatoTexture,
@@ -258,11 +354,15 @@ class GameScreen(
             showGuide = false,
             appearing = appearing,
         ) { position, delta ->
-            if (count > 1) {
-                showPotatoPowerCheck(appearing = false, count = count - 1)
+            potatoesPulled += 1f - delta / 2f
+            if (potatoesPulled > 3f) {
+                showText("GOT POTATO")
+                activities.remove("potato-pull")
             } else {
-                activePrecisionCheckEnding = null
-                showText("NICE POTATO")
+                if (count >= 2 && potatoesPulled < 2f) {
+                    showText("PULL HARDER")
+                }
+                showPotatoPowerCheck(appearing = false, count = count + 1)
             }
         }
     }
@@ -279,31 +379,58 @@ class GameScreen(
             appearing = false,
             isFullscreen = true,
         ) { position, delta ->
-            activePrecisionCheckEnding = null
             showText("NICE DUCK")
+            activities.remove("duck-hunt")
         }
     }
 
-    private fun showCookingPotatoSalad(appearing: Boolean = true, count: Int = 8) {
+    private fun showWoodCutter(key: String, showGuide: Boolean = false, count: Int = 0) {
+        activePrecisionCheckEnding = Ending.WOOD_CUTTING_WINS
+        precisionCheck.show(
+            null,
+            target = -0.45f,
+            speed = 3f,
+            disappearIn = 1f,
+            isVertical = false,
+            showGuide = showGuide,
+            appearing = false,
+            isFullscreen = true,
+        ) { position, delta ->
+            woodCollected += 1f - delta / 2f
+            if (woodCollected >= 3f) {
+                showText("GOT SOME WOOD")
+                interactiveTrees.remove(key)
+                activities.remove(key)
+            } else {
+                if (count == 2 && woodCollected < 2f) {
+                    showText("HIT THE TRUNK")
+                }
+                showWoodCutter(key, showGuide = count > 3, count + 1)
+            }
+        }
+    }
+
+    private fun showCookingPotatoSalad(appearing: Boolean = true, count: Int = 7) {
         activePrecisionCheckEnding = Ending.POTATO_SALAD_WINS
         precisionCheck.show(
             potatoSaladTexture,
-            target = Random.nextFloat() * 2f - 1f,
-            speed = 6f,
+            target = -0.6f,
+            speed = 5f,
             isVertical = count % 2 > 0,
             showGuide = true,
             appearing = appearing,
             disappearIn = if (count == 0) 1f else 0f
         ) { position, delta ->
+            println("position: $position")
             if (count > 0) {
                 showCookingPotatoSalad(appearing = false, count = count - 1)
             } else {
-                activePrecisionCheckEnding = null
                 showText("NICE POTATO SALAD")
+                hud.increaseStamina(1f)
+                activities.remove("cooking")
             }
         }
     }
-
 
     private fun printWhiteCentered(line: String, y: Float) {
         whiteTextDrawer.draw(
@@ -315,6 +442,7 @@ class GameScreen(
             ignoreLastPosition = true
         )
     }
+
     private fun printBlackCentered(line: String, y: Float) {
         characterTextDrawer.draw(
             batch,
@@ -358,10 +486,8 @@ class GameScreen(
             enteredLostWoods -> Ending.LOST_IN_WOODS
             isPlayerInWater -> if (floorY - player.body.position.y > 6f.units) Ending.DROWN else Ending.FROZEN_BY_STREAM
             activePrecisionCheckEnding != null -> activePrecisionCheckEnding!!
-            else -> Ending.NOTHING_SPECIAL
+            else -> ending//Ending.NOTHING_SPECIAL
         }
-        hud.update(delta, isPlayerInWater, enteredLostWoods)
-
 
         if (hud.stamina == 0f) {
             if (endingResetTimeout <= ENDING_RESET_TIMEOUT_SECONDS) {
@@ -372,17 +498,22 @@ class GameScreen(
             viewport.apply() // other viewports at check renderers are applying their own stuff
             printWhiteCentered(ending.text, VIRTUAL_HEIGHT / 2f + 32f)
             if (endingResetTimeout >= ENDING_NUMBER_TIMEOUT_SECONDS) {
-                printWhiteCentered("ENDING ${ending.ordinal + 1} OUT OF ${Ending.entries.size}", VIRTUAL_HEIGHT / 2f - 32f)
+                printWhiteCentered(
+                    "ENDING ${ending.ordinal + 1} OUT OF ${Ending.entries.size}",
+                    VIRTUAL_HEIGHT / 2f - 32f
+                )
             }
             if (endingResetTimeout >= ENDING_RESET_TIMEOUT_SECONDS) {
                 printWhiteCentered("PRESS ANY KEY TO START OVER", VIRTUAL_HEIGHT / 2f - 64f)
             }
             return
         }
+        hud.update(delta, isPlayerInWater, enteredLostWoods)
 
         // send update signals
         world.step(1f / refreshRate, 6, 2)
         player.update(delta, isPlayerInWater)
+        night?.update(delta, false)
 
         // update camera position for map rendering
         camera.position.x = player.body.position.x
@@ -429,7 +560,17 @@ class GameScreen(
             }
         }
         mapRenderer.renderBackground(camera, indoorFog, outdoorFog)
-        batch.use(camera) { player.draw(it) }
+        batch.use(camera) {
+            player.draw(it)
+            night?.draw(it)
+            largeTrees.forEach { it.render(batch) }
+            topWoods.forEach { it.render(batch) }
+            trees.forEach { it.render(batch) }
+            interactiveTrees.values.forEach { it.render(batch) }
+            for (activity in activities.values) {
+                activity.render(delta, player.body.position.x, player.body.linearVelocity.y == 0f, it)
+            }
+        }
         mapRenderer.renderForeground(camera, indoorFog, outdoorFog)
         if (enableDebugRender) {
             box2dRenderer.render(world, camera.combined)
@@ -463,13 +604,21 @@ class GameScreen(
             }
             return true
         }
-        if (hud.stamina == 0f || isGameStarted) {
+        if (hud.stamina == 0f && isGameStarted) {
             if (endingResetTimeout > ENDING_RESET_TIMEOUT_SECONDS) {
                 restart()
             }
             return true
         }
         if (precisionCheck.processKeyDown(keycode)) return true
+        for (activity in activities.values) {
+            if (activity.processKeyDown(
+                    keycode,
+                    player.body.position.x,
+                    player.body.linearVelocity.y == 0f
+                )
+            ) return true
+        }
         when (keycode) {
             Keys.F -> toggleFullScreen()
             Keys.NUM_1 -> showLettuceCheck()
@@ -517,6 +666,11 @@ class GameScreen(
 
 
     private fun restart() {
+        world.destroyBody(player.body)
+        night?.let {
+            world.destroyBody(it.body)
+            night = null
+        }
         player = createPlayer()
         hud.reset()
         precisionCheck.reset()
@@ -528,6 +682,10 @@ class GameScreen(
         outdoorFog = 1f
         ending = Ending.NOTHING_SPECIAL
         activePrecisionCheckEnding = null
+        woodCollected = 0f
+        potatoesPulled = 0f
+        lettucePicked = 0f
+        resetActivities()
     }
 
     enum class Ending(val text: String) {
@@ -542,6 +700,7 @@ class GameScreen(
         DUCK_WINS("COULD NOT HUNT A DUCK"),
         LOST_IN_WOODS("LOST IN WOODS"),
         NIGHT("DIDN'T SURVIVE THE NIGHT"),
+        NIGHT_CRASH("CRASHED BY DRAGON"),
         NOTHING_SPECIAL("STARVED TO DEATH"),
     }
 

@@ -29,7 +29,7 @@ Micro-games so far:
 * hit-a-duck
 * climb up
 
-# Diary, 5 more days to go
+# Diary, 3 more days to go
 
 Day 1 (friday, day-off, full throttle):
 * created a dummy world map out of dummy tiles
@@ -71,21 +71,25 @@ Day 8 (friday, workday):
 * implemented title screen
 * implemented different control schemes
 
-Hanging stuff:
-* code activity triggers on the level
-* simplified duck hunt (precise check simulating light gun)
-* wood cutting
+Day 9:
+* added new textures for trees and leaves
+* added some animation texture for the night sequence
+* fixed a bug with player box remaining in old place after restart
 
-Day 9, 10 plan (saturday, sunday, weekend)
+Day 10:
+* added some movement and collision check for the night sequence
+* used the forest textures
+* implemented wood cutting
+* implemented activity triggers
+
+Hanging stuff:
 * night sequence activities
-* night sequence animation
-  * test the workflow before committing into it!
 * fire capture
+* simplified duck hunt (precise check simulating light gun)
 * world backgrounds
-  * morning / day
-  * evening
+    * morning / day
+    * evening
 * starry night
-* ending selection (each activity calls setEnding(i))
 
 Day 11 plan (monday):
 * music

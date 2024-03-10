@@ -23,7 +23,8 @@ class PrecisionCheck(
     private val virtualPixelSize: () -> Int,
     private val virtualScreenOffsetY: () -> Int,
     private val screenWidth: () -> Int,
-    private val actionDifference: (Float) -> Unit
+    private val actionDifference: (Float) -> Unit,
+    private val actionStopped: () -> Unit,
 ) :
     Disposing by Self() {
 
@@ -66,7 +67,7 @@ class PrecisionCheck(
 
     fun processKeyDown(keycode: Int): Boolean {
         // ignore input if check is finished
-        if (fixedOnPosition != null) {
+        if (fixedOnPosition != null || !showing) {
             return false
         }
         if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z) {
@@ -77,7 +78,13 @@ class PrecisionCheck(
                 actionDifference(it)
                 onActionCallback(currentPosition, it)
             }
+            actionStopped()
             return true
+        }
+        if (keycode == Keys.UP || keycode == Keys.W || keycode == Keys.J || keycode == Keys.X || keycode == Keys.LEFT || keycode == Keys.RIGHT || keycode == Keys.A || keycode == Keys.D) {
+            showing = false
+            actionStopped()
+            return false
         }
         return false
     }

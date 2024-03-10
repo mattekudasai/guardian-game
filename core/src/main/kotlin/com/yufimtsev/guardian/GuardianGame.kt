@@ -21,5 +21,11 @@ class GuardianGame(private val refreshRateLimit: Int, private val toggleFullScre
         const val MAX_PLAYER_VELOCITY = 1f
         const val MAX_PLAYER_RUNNING_VELOCITY = 2f
         const val PLAYER_ACCELERATION = 0.1f
+
+
+        const val PLAYER_BIT: Short = 0b1
+        const val BLOCK_BIT: Short = 0b10
+        const val NIGHT_BIT: Short = 0b100
+        const val NIGHT_CRASH_BIT: Short = 0b1000
     }
 }

@@ -17,7 +17,8 @@ class Hud(
     private val screenWidth: () -> Int,
     private val virtualScreenOffsetX: () -> Int,
     private val virtualScreenOffsetY: () -> Int,
-    private val virtualPixelSize: () -> Int
+    private val virtualPixelSize: () -> Int,
+    private val onHunger: () -> Unit,
 ) : Disposing by Self() {
 
     var stamina = 0.5f
@@ -54,8 +55,8 @@ class Hud(
         }
         nothingHappensTimer += delta
         if (nothingHappensTimer > STAMINA_DECREASE_PERIOD_SECONDS) {
-            val hungerDecreaseRate = STAMINA_DECREASE_RATE
-            decreaseStamina(hungerDecreaseRate)
+            onHunger()
+            decreaseStamina(STAMINA_DECREASE_RATE)
             nothingHappensTimer = 0f
         }
         if (isPlayerInWater || isPlayerInLostWoods) {
@@ -154,6 +155,6 @@ class Hud(
     companion object {
         private const val DEFAULT_COUNTDOWN_SECONDS = 0.3f
         private const val STAMINA_DECREASE_PERIOD_SECONDS = 4f
-        private const val STAMINA_DECREASE_RATE = 0.05f
+        private const val STAMINA_DECREASE_RATE = 0.01f
     }
 }

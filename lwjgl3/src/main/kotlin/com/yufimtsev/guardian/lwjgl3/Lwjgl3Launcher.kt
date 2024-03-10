@@ -24,7 +24,7 @@ fun main() {
         if (isFullscreen) {
             setFullscreenMode(displayMode)
         } else {
-            setWindowedMode(3000, 2000)
+            setWindowedMode(800, 600)
         }
         useVsync(true)
         setForegroundFPS(refreshRateLimit.toInt())
@@ -36,7 +36,7 @@ fun main() {
         if (isFullscreen) {
             Gdx.graphics.setFullscreenMode(displayMode)
         } else {
-            Gdx.graphics.setWindowedMode(3000, 2000)
+            Gdx.graphics.setWindowedMode(800, 600)
         }
     }
     Lwjgl3Application(GuardianGame(refreshRateLimit.toInt(), toggleFullscreen, false), configuration)

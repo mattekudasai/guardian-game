@@ -7,6 +7,7 @@ import com.badlogic.gdx.physics.box2d.BodyDef
 import com.badlogic.gdx.physics.box2d.FixtureDef
 import com.badlogic.gdx.physics.box2d.PolygonShape
 import com.badlogic.gdx.physics.box2d.World
+import com.yufimtsev.guardian.GuardianGame
 import com.yufimtsev.guardian.utils.units
 
 fun TiledMap.forEachRectangle(layerName: String, block: (Rectangle) -> Unit) {
@@ -16,9 +17,9 @@ fun TiledMap.forEachRectangle(layerName: String, block: (Rectangle) -> Unit) {
         .forEach(block)
 }
 
-fun World.addBlock(bounds: Rectangle) = createDefaultCollider(bounds)
+fun World.addBlock(bounds: Rectangle) = createDefaultCollider(bounds, GuardianGame.BLOCK_BIT)
 
-private fun World.createDefaultCollider(bounds: Rectangle) =
+private fun World.createDefaultCollider(bounds: Rectangle, category: Short) =
     createBody(BodyDef().apply {
         type = BodyDef.BodyType.StaticBody
         position.set(
@@ -33,5 +34,8 @@ private fun World.createDefaultCollider(bounds: Rectangle) =
                     (bounds.height / 2).units
                 )
             }
-        })
+            filter.categoryBits = category
+        }).apply {
+            userData = Unit
+        }
     }
