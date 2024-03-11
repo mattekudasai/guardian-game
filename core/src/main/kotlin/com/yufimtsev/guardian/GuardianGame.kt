@@ -27,5 +27,6 @@ class GuardianGame(private val refreshRateLimit: Int, private val toggleFullScre
         const val BLOCK_BIT: Short = 0b10
         const val NIGHT_BIT: Short = 0b100
         const val NIGHT_CRASH_BIT: Short = 0b1000
+        const val FIREBALL_BIT: Short = 0b10000
     }
 }

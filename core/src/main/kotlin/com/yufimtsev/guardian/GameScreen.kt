@@ -1,7 +1,6 @@
 package com.yufimtsev.guardian
 
 import com.badlogic.gdx.Gdx
-import com.badlogic.gdx.Input.Keys
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
@@ -11,6 +10,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.maps.tiled.TiledMap
 import com.badlogic.gdx.maps.tiled.TmxMapLoader
+import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.physics.box2d.Box2DDebugRenderer
 import com.badlogic.gdx.physics.box2d.World
@@ -23,9 +23,12 @@ import com.yufimtsev.guardian.disposing.Self
 import com.yufimtsev.guardian.player.Hud
 import com.yufimtsev.guardian.player.Player
 import com.yufimtsev.guardian.utils.TextDrawer
+import com.yufimtsev.guardian.utils.pixelAligned
 import com.yufimtsev.guardian.utils.pixels
 import com.yufimtsev.guardian.utils.units
 import com.yufimtsev.guardian.world.Activity
+import com.yufimtsev.guardian.world.Duck
+import com.yufimtsev.guardian.world.Fireball
 import com.yufimtsev.guardian.world.LayeredMapRenderer
 import com.yufimtsev.guardian.world.Night
 import com.yufimtsev.guardian.world.TopWood
@@ -76,13 +79,38 @@ class GameScreen(
     private val box2dRenderer: Box2DDebugRenderer by remember { Box2DDebugRenderer() }
 
     private val playerTexture: Texture by remember { Texture("character.png") }
-    private var player: Player = createPlayer()/* by remember { Player(world, playerTexture, spawnPosition = map.layer("player-spawn").objects.get(0).let {
-        Vector2(it.x + it.width / 2f, it.y + it.height / 2f)
-    }) }*/
+    private var player: Player = createPlayer()
 
     private var night: Night? = null
+
     private fun createNight() = Night(world, spawnPosition = map.layer("night-spawn").objects.get(0).let {
         Vector2(it.x + it.width / 2f, it.y + it.height / 2f)
+    }, onHeadDown = { night ->
+        val headStartX = (night.body.position.x) * GuardianGame.PIXELS_PER_UNIT // backward unit conversion
+        val headY = (night.body.position.y) * GuardianGame.PIXELS_PER_UNIT // backward unit conversion
+
+        activities["night-head"] = Activity(markerTexture, Rectangle(headStartX - 104f, headY - 32f, 48f, 16f)) {
+            if (night.isFrozen) {
+                activities.remove("night-head")
+                night.freeze(500f)
+                showHeadPrecisionCheck()
+                println("head down activated")
+            } else {
+                ending = Ending.NIGHT
+                hud.decreaseStamina(1f)
+            }
+        }
+    }, onHeadUp = {
+        activities.remove("night-head")
+    }, spawnFireball = { position, goingRight ->
+        fireballs.add(
+            Fireball(
+                world,
+                fireballTexture,
+                position,
+                goingRight
+            )
+        )
     }).autoDisposing()
 
     private fun createPlayer(): Player =
@@ -111,21 +139,28 @@ class GameScreen(
     private val potatoSaladTexture: Texture by remember { Texture("potato_salad.png") }
     private val nothingTexture: Texture by remember { Texture("nothing.png") }
     private val markerTexture: Texture by remember { Texture("marker.png") }
+    private val fireballTexture: Texture by remember { Texture("fireball.png") }
+    private val cookedDuck: Texture by remember { Texture("cooked_duck.png") }
+    private val cookedHead: Texture by remember { Texture("cooked_head.png") }
     private val precisionCheck: PrecisionCheck by remember {
         PrecisionCheck(
             { virtualPixelSize },
             { virtualScreenOffsetY },
             { screenWidth },
             {
-                println("difference: $it")
                 val threshold = 0.15f
                 if (it < threshold) {
                     // do nothing, good enough
-                } else {
+                } else if (activePrecisionCheckEnding != Ending.NIGHT && activePrecisionCheckEnding != Ending.DUCK_WINS) {
                     hud.decreaseStamina((it - threshold) / 40f)
                 }
             },
-            { activePrecisionCheckEnding = null }
+            {
+                if (it && night?.isFrozen == true) {
+                    night?.freeze(1f)
+                }
+                activePrecisionCheckEnding = null
+            }
         )
     }
 
@@ -165,15 +200,28 @@ class GameScreen(
     private var potatoesPulled = 0f
     private var lettucePicked = 0f
     private var woodCollected = 0f
+    private var firewoodCollected = 0f
+    private var duckCollected = 0f
+    private var isGameEnding = false
+    private var timeToShowLastCooking = 0f
+    private var shouldFade = false
 
     private val smallTreeTexture: Texture by remember { Texture("small_tree.png") }
     private val mediumTreeTexture: Texture by remember { Texture("medium_tree.png") }
     private val largeTreeTexture: Texture by remember { Texture("large_tree.png") }
     private val forestTopTexture: Texture by remember { Texture("forest_top.png") }
+    private val duckTextures = listOf(
+        Texture("duck_up.png").autoDisposing(),
+        Texture("duck_middle.png").autoDisposing(),
+        Texture("duck_down.png").autoDisposing(),
+    )
+    private val deadDuckTexture: Texture by remember { Texture("duck_dead.png") }
     private val interactiveTrees = mutableMapOf<String, Tree>()
     private val largeTrees = mutableListOf<Tree>()
     private val trees = mutableListOf<Tree>()
     private val topWoods = mutableListOf<TopWood>()
+    private val fireballs = mutableListOf<Fireball>()
+    private val ducks = mutableListOf<Duck>()
 
     init {
         map.forEachRectangle("block", world::addBlock)
@@ -199,18 +247,18 @@ class GameScreen(
         map.forEachRectangle("medium-tree") {
             trees += Tree(mediumTreeTexture, it, scaleFactor = 0.3f)
         }
-        map.forEachRectangle("duck-hunt") {}
-        map.forEachRectangle("falling-rocks") {}
-        map.forEachRectangle("night-hunt") {}
         map.forEachRectangle("lost-woods-top") {
             topWoods += TopWood(forestTopTexture, it)
         }
         floorY = player.body.position.y
         camera.position.y = player.body.position.y + 48f.units
-        world.setContactListener(WorldContactListener { fatal ->
+        world.setContactListener(WorldContactListener { fatal, fire ->
             if (fatal) {
                 ending = Ending.NIGHT_CRASH
                 hud.decreaseStamina(1f)
+            } else if (fire) {
+                ending = Ending.NIGHT_FIRE
+                hud.decreaseStamina(0.1f)
             } else {
                 ending = Ending.NIGHT
                 hud.decreaseStamina(0.2f)
@@ -229,7 +277,19 @@ class GameScreen(
             activities["lettuce-pick"] = Activity(markerTexture, it) { showLettuceCheck(appearing = true) }
         }
         map.forEachRectangle("bed") {
-            activities["bed"] = Activity(markerTexture, it) { showText("I DON'T WANT TO SLEEP") }
+            activities["bed"] = Activity(markerTexture, it) {
+                val night = this.night
+                if (night == null) {
+                    showText("I DON'T WANT TO SLEEP")
+                } else if (night.health == 2.5f) {
+                    showText("I NEED TO CHECK\nWHAT'S GOING ON")
+                } else if (night.health > 0f) {
+                    showText("I NEED TO GET RID\nOF THAT THING")
+                } else {
+                    ending = Ending.NOT_ENDING
+                    hud.decreaseStamina(1f)
+                }
+            }
         }
         map.forEachRectangle("cooking") {
             activities["cooking"] = Activity(markerTexture, it) {
@@ -260,6 +320,37 @@ class GameScreen(
             interactiveTrees[key] = Tree(smallTreeTexture, it)
             index++
         }
+
+        map.forEachRectangle("duck-hunt") {
+            activities["duck-hunt"] = Activity(markerTexture, it) {
+                showDuckHunt()
+            }
+        }
+        map.forEachRectangle("falling-rocks") {}
+        map.forEachRectangle("stove") {
+            activities["stove"] = Activity(markerTexture, it) {
+                if (duckCollected == 0f) {
+                    showText("NEED SOMETHING TO COOK")
+                } else if (firewoodCollected == 0f) {
+                    showText("NEED MORE FIREWOOD")
+                } else {
+                    showCookingDuck(appearing = true, count = 8)
+                }
+            }
+        }
+        resetNightHunt()
+    }
+
+    private fun resetNightHunt() {
+        map.forEachRectangle("night-hunt") {
+            activities["night-hunt"] = Activity(markerTexture, it) {
+                if (night != null) {
+                    showNightHunt(it)
+                } else {
+                    showText("LOVE THIS VIEW")
+                }
+            }
+        }
     }
 
     override fun show() {
@@ -285,7 +376,7 @@ class GameScreen(
             onActionCallback = { position, delta ->
                 if (true) {
                     // TODO: return sound when sound is there
-                }else if (delta > 0.5f) {
+                } else if (delta > 0.5f) {
                     chompSound.play(0.6f)
                 } else {
                     crashSound.play()
@@ -297,24 +388,31 @@ class GameScreen(
             } else if (count < 3) {
                 showLogPrecisionCheck(appearing = false, showGuide = count == 2, count = count + 1)
             } else {
+                activities.remove("wood-split")
+                firewoodCollected = 1f
                 showText("GOT FIREWOOD")
             }
         }
     }
 
-    private fun showLogPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = true, count: Int = 3) {
+    private fun showLogPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = false, count: Int = 0) {
         activePrecisionCheckEnding = Ending.WOOD_SPLITTING_WINS
         precisionCheck.show(
             logTexture,
             target = 0f,
-            speed = 3f,
+            speed = 2f,
             disappearIn = 0f,
             isVertical = true,
             powerForFixedPosition = null,
             showGuide = showGuide,
             appearing = appearing
         ) { position, delta ->
-            showLogPowerCheck(appearing = false, powerForFixedPosition = position, count = count)
+            if (delta > 0.2f) {
+                showText("HIT IN THE MIDDLE")
+                showLogPrecisionCheck(appearing = false, showGuide = true, count = count)
+            } else {
+                showLogPowerCheck(appearing = false, powerForFixedPosition = position, count = count)
+            }
         }
     }
 
@@ -369,18 +467,170 @@ class GameScreen(
 
     private fun showDuckHunt() {
         activePrecisionCheckEnding = Ending.DUCK_WINS
+        for (i in 0..5) {
+            val right = Random.nextBoolean()
+            val offsetX = if (right) {
+                -VIRTUAL_WIDTH
+            } else {
+                VIRTUAL_WIDTH
+            }.units
+            val offsetY = (32f + Random.nextFloat() * 64f).units
+            ducks.add(
+                Duck(
+                    duckTextures,
+                    deadDuckTexture,
+                    Vector2(player.body.position.x + offsetX, player.body.position.y + offsetY),
+                    right,
+                    50f + Random.nextFloat() * 100f
+                )
+            )
+        }
+        precisionCheck.show(
+            null,
+            target = 0.6f,
+            speed = 2f,
+            disappearIn = 1f,
+            isVertical = true,
+            showGuide = false,
+            appearing = false,
+            isFullscreen = true,
+            onActionCallback = { position, delta ->
+                val playerX = player.body.position.x
+                val positionOffset = (position * VIRTUAL_WIDTH / 2f).units
+                val hitPosition = playerX + positionOffset
+                ducks.forEach {
+                    val accuracy = Math.abs(it.currentPositionX - hitPosition)
+                    if (accuracy <= 0.2f) {
+                        it.dead = true
+                    }
+                }
+            }
+        ) { position, delta ->
+            if (ducks.count { it.dead } > 0) {
+                duckCollected = 1f
+                showText("NICE DUCK")
+                activities.remove("duck-hunt")
+            }
+            ducks.clear()
+            //ducks.filter { it.dead }.forEach { ducks.remove(it) }
+        }
+    }
+
+    private fun showNightHunt(activity: Activity) {
+        activePrecisionCheckEnding = Ending.NIGHT
         precisionCheck.show(
             null,
             target = 0.6f,
             speed = 5f,
             disappearIn = 0f,
             isVertical = true,
-            showGuide = true,
+            showGuide = false,
             appearing = false,
             isFullscreen = true,
         ) { position, delta ->
-            showText("NICE DUCK")
-            activities.remove("duck-hunt")
+            activities.remove("night-hunt")
+            val playerX = player.body.position.x
+            night?.let {
+                val positionOffset = (position * VIRTUAL_WIDTH / 2f).units
+                val hitPosition = playerX + positionOffset
+
+                val accuracy = Math.abs(it.body.position.x - hitPosition)
+                if (accuracy < 0.5f) {
+                    if (!activities.containsKey("night-head")) {
+                        if (it.health > 2f) {
+                            showText("CHOOSE A BETTER TIMING")
+                        }
+                        it.freeze(1f)
+                        resetNightHunt()
+                    } else {
+                        it.freeze(3f)
+                    }
+                } else {
+                    showText("TARGET FOR ITS BODY")
+                    showNightHunt(activity)
+                }
+            }
+        }
+    }
+
+
+    private fun showHeadPowerCheck(powerForFixedPosition: Float) {
+        precisionCheck.show(
+            cookedHead,
+            target = 0.9f,
+            speed = 6f,
+            disappearIn = 1f,
+            isVertical = true,
+            powerForFixedPosition = powerForFixedPosition,
+            showGuide = false,
+            appearing = false,
+            onActionCallback = { position, delta ->
+                night?.freeze(1f)
+
+                if (true) {
+                    // TODO: return sound when sound is there
+                } else if (delta > 0.5f) {
+                    chompSound.play(0.6f)
+                } else {
+                    crashSound.play()
+                }
+            }) { position, delta ->
+            if (delta > 0.25f) {
+                showText("HIT HARDER")
+            } else {
+                val health = night?.let {
+                    it.health -= 1f - delta * powerForFixedPosition
+                    it.health
+                } ?: 0f
+                if (health > 2f) {
+                    showText("IT IS TOUGH")
+                } else if (health > 1f) {
+                    showText("ALMOST GOT IT")
+                } else if (health > 0f) {
+                    showText("JUST ONE MORE")
+                } else {
+                    isGameEnding = true
+                    night?.freeze(500f)
+                    shouldFade = true
+                    timeToShowLastCooking = 2f
+                    activities.keys.filter { !it.equals("bed") }.forEach { activities.remove(it) }
+                }
+                if (!isGameEnding) {
+                    resetNightHunt()
+                }
+            }
+        }
+    }
+
+    private fun showHeadPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = false, count: Int = 0) {
+        activePrecisionCheckEnding = Ending.NIGHT_HEAD
+        precisionCheck.show(
+            cookedHead,
+            target = 0.5f,
+            speed = 3f,
+            disappearIn = 0f,
+            isVertical = true,
+            powerForFixedPosition = null,
+            showGuide = showGuide,
+            appearing = appearing,
+            onActionCallback = { positon, delta ->
+                if (count > 3) {
+                    night?.freeze(1f)
+                }
+            }
+        ) { position, delta ->
+            if (delta > 0.2f) {
+                if (count > 2) {
+                    night?.freeze(0f)
+                    showText("LET'S TRY AGAIN")
+                } else {
+                    showText("AIM FOR NECK")
+                    showHeadPrecisionCheck(appearing = false, showGuide = count > 1, count + 1)
+                }
+            } else {
+                night?.freeze(500f)
+                showHeadPowerCheck(powerForFixedPosition = position)
+            }
         }
     }
 
@@ -421,13 +671,54 @@ class GameScreen(
             appearing = appearing,
             disappearIn = if (count == 0) 1f else 0f
         ) { position, delta ->
-            println("position: $position")
             if (count > 0) {
                 showCookingPotatoSalad(appearing = false, count = count - 1)
             } else {
                 showText("NICE POTATO SALAD")
                 hud.increaseStamina(1f)
                 activities.remove("cooking")
+            }
+        }
+    }
+
+    private fun showCookingDuck(appearing: Boolean = true, count: Int = 7) {
+        activePrecisionCheckEnding = Ending.ROAST_DUCK_WINS
+        precisionCheck.show(
+            cookedDuck,
+            target = -0.6f,
+            speed = 5f,
+            isVertical = count % 2 > 0,
+            showGuide = true,
+            appearing = appearing,
+            disappearIn = if (count == 0) 1f else 0f
+        ) { position, delta ->
+            if (count > 0) {
+                showCookingDuck(appearing = false, count = count - 1)
+            } else {
+                showText("NICE DUCK")
+                hud.increaseStamina(1f)
+                activities.remove("stove")
+                night = createNight()
+            }
+        }
+    }
+
+    private fun showCookingNight(appearing: Boolean = true, count: Int = 7) {
+        activePrecisionCheckEnding = Ending.NOT_ENDING
+        precisionCheck.show(
+            cookedHead,
+            target = -0.6f,
+            speed = 5f,
+            isVertical = count % 2 > 0,
+            showGuide = true,
+            appearing = appearing,
+            disappearIn = if (count == 0) 1f else 0f
+        ) { position, delta ->
+            if (count > 0) {
+                showCookingNight(appearing = false, count = count - 1)
+            } else {
+                night?.freeze(0f)
+                shouldFade = false
             }
         }
     }
@@ -508,12 +799,22 @@ class GameScreen(
             }
             return
         }
-        hud.update(delta, isPlayerInWater, enteredLostWoods)
+        if (!isGameEnding) {
+            hud.update(delta, isPlayerInWater, enteredLostWoods)
+        }
 
         // send update signals
         world.step(1f / refreshRate, 6, 2)
-        player.update(delta, isPlayerInWater)
-        night?.update(delta, false)
+        if (!shouldFade) {
+            player.update(delta, isPlayerInWater)
+        }
+        night?.update(delta, player.body.position.x)
+        if (timeToShowLastCooking > 0f) {
+            timeToShowLastCooking -= delta
+            if (timeToShowLastCooking <= 0f) {
+                showCookingNight()
+            }
+        }
 
         // update camera position for map rendering
         camera.position.x = player.body.position.x
@@ -528,6 +829,13 @@ class GameScreen(
         viewport.apply() // other viewports at check renderers are applying their own stuff
         // skybox
         shapeRenderer.use(ShapeRenderer.ShapeType.Filled, camera) {
+            if (night != null) {
+                it.color.set(0.1f, 0.1f, 0.15f, 1f)
+            } else if (isEvening()) {
+                it.color.set(0.4f, 0.26f, 0.32f, 1f)
+            } else {
+                it.color.set(0.5f, 0.5f, 0.6f, 1f)
+            }
             it.rect(0f, 0f, VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
         }
         if (player.body.position.x < doorEndX) {
@@ -539,7 +847,11 @@ class GameScreen(
                 indoorFog = min(1f, indoorFog + delta * 5f)
             }
         }
-        if (player.body.position.x > doorStartX && player.body.position.x < lostWoodsEntranceX) {
+        if (isGameEnding && shouldFade) {
+            if (outdoorFog < 1f) {
+                outdoorFog = min(1f, outdoorFog + delta * 5f)
+            }
+        } else if (player.body.position.x > doorStartX && player.body.position.x < lostWoodsEntranceX) {
             if (outdoorFog > 0f) {
                 outdoorFog = max(0f, outdoorFog - delta * 5f)
             }
@@ -567,6 +879,19 @@ class GameScreen(
             topWoods.forEach { it.render(batch) }
             trees.forEach { it.render(batch) }
             interactiveTrees.values.forEach { it.render(batch) }
+            fireballs.asSequence().filter { it.isDestroyed }.toList().forEach {
+                fireballs.remove(it)
+                world.destroyBody(it.body)
+            }
+            fireballs.forEach {
+                it.updatePosition(delta)
+                it.draw(batch)
+                if (it.body.position.y < floorY - 32f.units) {
+                    it.isDestroyed = true
+                }
+            }
+            ducks.filter { !it.update(delta) }.forEach { ducks.remove(it) }
+            ducks.forEach { it.draw(batch) }
             for (activity in activities.values) {
                 activity.render(delta, player.body.position.x, player.body.linearVelocity.y == 0f, it)
             }
@@ -578,22 +903,27 @@ class GameScreen(
 
         if (characterTextCountdown > 0f) {
             characterTextCountdown -= delta
+            val maxLineLength = textToShow.maxOf { it.length }
             characterTextDrawer.draw(
                 batch,
                 camera,
                 textToShow,
-                player.body.position.x,
-                player.body.position.y
+                player.body.position.x - (maxLineLength * 3f).units,
+                player.body.position.y + 12f.units
             )
-            if (characterTextCountdown <= 0f) {
+            if (characterTextCountdown <= 0f || shouldFade) {
                 characterTextCountdown = 0f
                 characterTextDrawer.clear()
             }
         }
 
-        precisionCheck.updateAndRender(delta)
-        hud.render()
+        precisionCheck.updateAndRender(delta, isGameEnding)
+        if (!isGameEnding || (shouldFade && outdoorFog < 1f)) {
+            hud.render()
+        }
     }
+
+    private fun isEvening() = duckCollected > 0f && (woodCollected > 0f || firewoodCollected > 0f)
 
     override fun keyDown(keycode: Int): Boolean {
         // TODO: send signals to player
@@ -619,14 +949,22 @@ class GameScreen(
                 )
             ) return true
         }
-        when (keycode) {
-            Keys.F -> toggleFullScreen()
-            Keys.NUM_1 -> showLettuceCheck()
-            Keys.NUM_2 -> showLogPrecisionCheck()
-            Keys.NUM_3 -> showDuckHunt()
-            Keys.NUM_4 -> showPotatoPowerCheck()
-            Keys.NUM_5 -> showCookingPotatoSalad()
+
+        if (night != null) {
+            // terrible hack, but I have no idea how to handle all the possible scenarios of night hunt being disabled
+            if (!activities.containsKey("night-hunt") && night?.isFrozen != true && (night?.health ?: 0f) > 0f) {
+                resetNightHunt()
+            }
         }
+
+        /*        when (keycode) {
+                    Keys.F -> toggleFullScreen()
+                    Keys.NUM_1 -> showLettuceCheck()
+                    Keys.NUM_2 -> showLogPrecisionCheck()
+                    Keys.NUM_3 -> showDuckHunt()
+                    Keys.NUM_4 -> showPotatoPowerCheck()
+                    Keys.NUM_5 -> showCookingPotatoSalad()
+                }*/
         hud.processKeyDown(keycode)
         return true
     }
@@ -686,6 +1024,14 @@ class GameScreen(
         potatoesPulled = 0f
         lettucePicked = 0f
         resetActivities()
+        pixelAligned = true
+        isGameEnding = false
+        shouldFade = false
+        timeToShowLastCooking = 0f
+        duckCollected = 0f
+        firewoodCollected = 0f
+        fireballs.clear()
+        ducks.clear()
     }
 
     enum class Ending(val text: String) {
@@ -698,9 +1044,13 @@ class GameScreen(
         WOOD_SPLITTING_WINS("COULD NOT SPLIT A LOG"),
         WOOD_CUTTING_WINS("COULD NOT CUT A WOOD"),
         DUCK_WINS("COULD NOT HUNT A DUCK"),
+        ROAST_DUCK_WINS("COULD NOT COOK A DUCK"),
         LOST_IN_WOODS("LOST IN WOODS"),
         NIGHT("DIDN'T SURVIVE THE NIGHT"),
+        NIGHT_FIRE("BURNT IN FIRE"),
         NIGHT_CRASH("CRASHED BY DRAGON"),
+        NIGHT_HEAD("COULDN'T BEAT THE DRAGON"),
+        EATEN_BY_NIGHT("EATEN BY DRAGON"),
         NOTHING_SPECIAL("STARVED TO DEATH"),
     }
 

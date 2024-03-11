@@ -24,7 +24,7 @@ class PrecisionCheck(
     private val virtualScreenOffsetY: () -> Int,
     private val screenWidth: () -> Int,
     private val actionDifference: (Float) -> Unit,
-    private val actionStopped: () -> Unit,
+    private val actionStopped: (userMovedAway: Boolean) -> Unit,
 ) :
     Disposing by Self() {
 
@@ -38,6 +38,7 @@ class PrecisionCheck(
     )
 
     private var showing: Boolean = false
+    private var isGameEnding: Boolean = false
     private var appearing: Boolean = true
     private var disappearIn: Float = SECONDS_TO_DISAPPEAR
     private var timer: Float = 0f
@@ -78,18 +79,21 @@ class PrecisionCheck(
                 actionDifference(it)
                 onActionCallback(currentPosition, it)
             }
-            actionStopped()
+            actionStopped(false)
             return true
         }
-        if (keycode == Keys.UP || keycode == Keys.W || keycode == Keys.J || keycode == Keys.X || keycode == Keys.LEFT || keycode == Keys.RIGHT || keycode == Keys.A || keycode == Keys.D) {
-            showing = false
-            actionStopped()
-            return false
+        if (!isFullscreen && !isGameEnding) {
+            if (keycode == Keys.UP || keycode == Keys.W || keycode == Keys.J || keycode == Keys.X || keycode == Keys.LEFT || keycode == Keys.RIGHT || keycode == Keys.A || keycode == Keys.D) {
+                showing = false
+                actionStopped(true)
+                return false
+            }
         }
         return false
     }
 
-    fun updateAndRender(delta: Float) {
+    fun updateAndRender(delta: Float, isGameEnding: Boolean) {
+        this.isGameEnding = isGameEnding
         if (!showing) {
             return
         }

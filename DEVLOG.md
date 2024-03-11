@@ -82,36 +82,40 @@ Day 10:
 * implemented wood cutting
 * implemented activity triggers
 
-Hanging stuff:
-* night sequence activities
-* fire capture
-* simplified duck hunt (precise check simulating light gun)
-* world backgrounds
-    * morning / day
-    * evening
-* starry night
+Day 11:
+* finished the final sequence and the main game loop
+* implemented duck hunt
+* added some limited day, evening and night
+* added more resources for everything
+* connected all the pieces together
+* LOGIC IS FINAL NOW (except for bugfixes)
 
-Day 11 plan (monday):
+Known issues:
+* some hints are appearing in incorrect times
+* cooking is super-predictable (should be harder for everything other than potato salad)
+
+Hanging stuff:
+* starry night
 * music
-  * crickets (intro, night)
-  * morning outdoor
-  * lost woods theme (owls)
-  * evening outdoor
-  * night sequence theme
-  * starry night
+    * crickets (intro, night)
+    * morning outdoor
+    * lost woods theme (owls)
+    * evening outdoor
+    * night sequence theme
+    * starry night
 * sound effects (mooore!!!)
-  * lettuce pick
-  * potato pull
-  * salad chop
-  * wood cut
-  * arrow launch
-  * arrow hit
-  * lost woods sounds (howling?)
-  * night sequence sounds (quite a few)
-  * footsteps / falling on rock, soil, grass
-  * water / footsteps in water
-  * roasting a duck
-  * cooking a late dinner
+    * lettuce pick
+    * potato pull
+    * salad chop
+    * wood cut
+    * arrow launch
+    * arrow hit
+    * lost woods sounds (howling?)
+    * night sequence sounds (quite a few)
+    * footsteps / falling on rock, soil, grass
+    * water / footsteps in water
+    * roasting a duck
+    * cooking a late dinner
 
 Day 12 (tuesday, workday):
 * testing / fixing

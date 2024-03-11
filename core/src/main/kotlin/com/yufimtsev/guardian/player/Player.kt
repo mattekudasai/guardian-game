@@ -13,6 +13,7 @@ import com.badlogic.gdx.physics.box2d.FixtureDef
 import com.badlogic.gdx.physics.box2d.PolygonShape
 import com.badlogic.gdx.physics.box2d.World
 import com.yufimtsev.guardian.GuardianGame.Companion.BLOCK_BIT
+import com.yufimtsev.guardian.GuardianGame.Companion.FIREBALL_BIT
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_RUNNING_VELOCITY
 import com.yufimtsev.guardian.GuardianGame.Companion.MAX_PLAYER_VELOCITY
 import com.yufimtsev.guardian.GuardianGame.Companion.NIGHT_BIT
@@ -23,6 +24,7 @@ import com.yufimtsev.guardian.disposing.Disposing
 import com.yufimtsev.guardian.disposing.Self
 import com.yufimtsev.guardian.utils.pixels
 import com.yufimtsev.guardian.utils.units
+import com.yufimtsev.guardian.world.Fireball
 import ktx.collections.GdxArray
 import kotlin.experimental.or
 
@@ -48,7 +50,7 @@ class Player(world: World, texture: Texture, private val spawnPosition: Vector2)
             }*/
             friction = 0.8f
             filter.categoryBits = PLAYER_BIT
-            filter.maskBits = NIGHT_BIT or BLOCK_BIT or NIGHT_CRASH_BIT
+            filter.maskBits = NIGHT_BIT or BLOCK_BIT or NIGHT_CRASH_BIT or FIREBALL_BIT
         }).apply {
             userData = this@Player
         }

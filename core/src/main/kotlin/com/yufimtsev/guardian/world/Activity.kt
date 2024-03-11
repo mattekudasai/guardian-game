@@ -10,7 +10,7 @@ import com.yufimtsev.guardian.utils.pixels
 import com.yufimtsev.guardian.utils.units
 import kotlin.math.sin
 
-class Activity(private val markerTexture: Texture, private val position: Rectangle, private val onAction: () -> Unit) :
+class Activity(private val markerTexture: Texture, private val position: Rectangle, private val onAction: (Activity) -> Unit) :
     Disposing by Self() {
 
     private val positionStartX = position.x.units
@@ -40,7 +40,7 @@ class Activity(private val markerTexture: Texture, private val position: Rectang
     fun processKeyDown(keycode: Int, playerX: Float, playerStanding: Boolean): Boolean {
         if (isActive && playerStanding && position.x.units < playerX && (position.x + position.width).units > playerX) {
             if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z || keycode == Keys.DOWN || keycode == Keys.S) {
-                onAction()
+                onAction(this)
                 isActive = false
                 return true
             }
