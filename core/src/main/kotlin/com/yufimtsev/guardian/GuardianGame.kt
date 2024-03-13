@@ -20,7 +20,7 @@ class GuardianGame(private val refreshRateLimit: Int, private val toggleFullScre
         const val HUD_VIRTUAL_HEIGHT = 16f
         const val MAX_PLAYER_VELOCITY = 1f
         const val MAX_PLAYER_RUNNING_VELOCITY = 2f
-        const val PLAYER_ACCELERATION = 0.1f
+        const val PLAYER_ACCELERATION = 0.1f//10f
 
 
         const val PLAYER_BIT: Short = 0b1

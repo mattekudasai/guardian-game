@@ -21,6 +21,7 @@ class TextDrawer(fontFileName: String, private val backgroundColor: Color) : Dis
         putRegion(',')
         putRegion('\'')
         ('0'..'9').forEach(::putRegion)
+        putRegion(':')
     }
     private val shapeRenderer: ShapeRenderer by remember { ShapeRenderer() }
 

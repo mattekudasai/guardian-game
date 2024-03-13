@@ -1,6 +1,8 @@
 package com.yufimtsev.guardian.checks
 
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input.Keys
+import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
@@ -37,7 +39,7 @@ class PrecisionCheck(
         camera
     )
 
-    private var showing: Boolean = false
+    var showing: Boolean = false
     private var isGameEnding: Boolean = false
     private var appearing: Boolean = true
     private var disappearIn: Float = SECONDS_TO_DISAPPEAR
@@ -56,12 +58,14 @@ class PrecisionCheck(
     private var texture: Texture? = null
     private var onActionCallback: (position: Float, delta: Float) -> Unit = { _, _ -> }
     private var onFinishCallback: (position: Float, delta: Float) -> Unit = { _, _ -> }
-    private var isFullscreen = false
+    var isFullscreen = false
     private var tint: Float = 0f
     private var progress: Float = 0f
     private var timeLimit: Float = 0f
 
     private val powerTexture: Texture by remember { Texture("power.png") }
+    private val buzzSound = Gdx.audio.newSound(Gdx.files.internal("buzz.wav")).autoDisposing()
+    private var buzzSoundId: Long = -2L
 
     private val centerDelta: Float?
         get() = fixedOnPosition?.let { Math.abs(target - it) }
@@ -71,7 +75,7 @@ class PrecisionCheck(
         if (fixedOnPosition != null || !showing) {
             return false
         }
-        if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z) {
+        if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z || keycode == Keys.J || keycode == Keys.X) {
             val currentPosition = guidePosition
             fixedOnPosition = currentPosition
             timer = 0f
@@ -83,10 +87,11 @@ class PrecisionCheck(
             return true
         }
         if (!isFullscreen && !isGameEnding) {
-            if (keycode == Keys.UP || keycode == Keys.W || keycode == Keys.J || keycode == Keys.X || keycode == Keys.LEFT || keycode == Keys.RIGHT || keycode == Keys.A || keycode == Keys.D) {
-                showing = false
-                actionStopped(true)
-                return false
+            if (keycode == Keys.UP || keycode == Keys.W || keycode == Keys.LEFT || keycode == Keys.RIGHT || keycode == Keys.A || keycode == Keys.D) {
+                // just ignore that
+                /*showing = false
+                actionStopped(true)*/
+                return true
             }
         }
         return false
@@ -108,6 +113,10 @@ class PrecisionCheck(
             }
             guidePosition
         } else if (fixedOnPosition != null) {
+            buzzSound.stop()
+            if (buzzSoundId != -2L) {
+                buzzSoundId = -2L
+            }
             if (timer > disappearIn) {
                 showing = false
                 onFinishCallback(fixedOnPosition!!, centerDelta!!)
@@ -137,6 +146,16 @@ class PrecisionCheck(
             }
         }
         if (!appearing) {
+            if (fixedOnPosition == null) {
+                if (buzzSoundId == -2L) {
+                    buzzSound.stop()
+                    buzzSoundId = buzzSound.play() // calling .loop() breaks playback on webgl
+                    println("buzz started: $buzzSoundId")
+                } else {
+                    buzzSound.setLooping(buzzSoundId, true)
+                    buzzSound.setPitch(buzzSoundId, position / 2f + 1f)
+                }
+            }
             renderer.use(ShapeRenderer.ShapeType.Filled, camera) {
                 if (showGuide) {
                     it.setColor(0.5f, 1f, 0.5f, 1f)

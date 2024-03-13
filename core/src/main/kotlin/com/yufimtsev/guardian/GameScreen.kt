@@ -1,6 +1,8 @@
 package com.yufimtsev.guardian
 
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.Input
+import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
@@ -94,7 +96,6 @@ class GameScreen(
                 activities.remove("night-head")
                 night.freeze(500f)
                 showHeadPrecisionCheck()
-                println("head down activated")
             } else {
                 ending = Ending.NIGHT
                 hud.decreaseStamina(1f)
@@ -139,9 +140,11 @@ class GameScreen(
     private val potatoSaladTexture: Texture by remember { Texture("potato_salad.png") }
     private val nothingTexture: Texture by remember { Texture("nothing.png") }
     private val markerTexture: Texture by remember { Texture("marker.png") }
+    private val targetTexture: Texture by remember { Texture("target.png") }
     private val fireballTexture: Texture by remember { Texture("fireball.png") }
     private val cookedDuck: Texture by remember { Texture("cooked_duck.png") }
     private val cookedHead: Texture by remember { Texture("cooked_head.png") }
+    private val nightSnow: Texture by remember { Texture("night/snow.png") }
     private val precisionCheck: PrecisionCheck by remember {
         PrecisionCheck(
             { virtualPixelSize },
@@ -151,7 +154,7 @@ class GameScreen(
                 val threshold = 0.15f
                 if (it < threshold) {
                     // do nothing, good enough
-                } else if (activePrecisionCheckEnding != Ending.NIGHT && activePrecisionCheckEnding != Ending.DUCK_WINS) {
+                } else if (activePrecisionCheckEnding != Ending.NIGHT && activePrecisionCheckEnding != Ending.NOTHING_SPECIAL) {
                     hud.decreaseStamina((it - threshold) / 40f)
                 }
             },
@@ -169,6 +172,18 @@ class GameScreen(
 
     private val chompSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("chomp.wav")) }
     private val crashSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("crash.wav")) }
+    private val titleTextSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("title_text.wav")) }
+    private val deathSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("death.wav")) }
+    private val damageSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("damage.wav")) }
+    private val speechSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("speech.wav")) }
+    private val startSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("start.wav")) }
+    private val lettuceSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("lettuce.wav")) }
+    private val potatoSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("potato.wav")) }
+    private val splashSound = lettuceSound
+    private val shotSound = lettuceSound
+    private val cookSound = lettuceSound
+    private val cookedSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("cooked.wav")) }
+    private val woodsMusic: Music by remember { Gdx.audio.newMusic(Gdx.files.internal("woods.ogg")) }
 
     private val finalPhrases = listOf(
         "NICE DRAGON STEW",
@@ -181,6 +196,7 @@ class GameScreen(
     )
 
     private var floorY: Float = 0f
+    private var wasPlayerInWater = false
     private var doorStartX: Float = 0f
     private var doorEndX: Float = 0f
     private var lostWoodsEntranceX: Float = 0f
@@ -189,6 +205,7 @@ class GameScreen(
     private var lostWoodsWidth: Float = 0f
     private var enteredLostWoods: Boolean = false
     private var endingResetTimeout = 0f
+    private var deathSoundDelay = 0f
     private var characterTextCountdown: Float = 0f
     private var textToShow: List<String> = listOf("")
     private var indoorFog = 0f
@@ -205,6 +222,8 @@ class GameScreen(
     private var isGameEnding = false
     private var timeToShowLastCooking = 0f
     private var shouldFade = false
+    private var potatoSaladHintShown = false
+    private var finishedLateBecauseOfPotatoSalad = 0 // DO NOT RESET ON RESTART
 
     private val smallTreeTexture: Texture by remember { Texture("small_tree.png") }
     private val mediumTreeTexture: Texture by remember { Texture("medium_tree.png") }
@@ -254,12 +273,14 @@ class GameScreen(
         camera.position.y = player.body.position.y + 48f.units
         world.setContactListener(WorldContactListener { fatal, fire ->
             if (fatal) {
-                ending = Ending.NIGHT_CRASH
+                ending = Ending.NIGHT
                 hud.decreaseStamina(1f)
             } else if (fire) {
-                ending = Ending.NIGHT_FIRE
+                damageSound.play()
+                ending = Ending.NIGHT
                 hud.decreaseStamina(0.1f)
             } else {
+                damageSound.play()
                 ending = Ending.NIGHT
                 hud.decreaseStamina(0.2f)
             }
@@ -286,17 +307,17 @@ class GameScreen(
                 } else if (night.health > 0f) {
                     showText("I NEED TO GET RID\nOF THAT THING")
                 } else {
-                    ending = Ending.NOT_ENDING
+                    ending = Ending.TRUE_ENDING
                     hud.decreaseStamina(1f)
                 }
             }
         }
         map.forEachRectangle("cooking") {
             activities["cooking"] = Activity(markerTexture, it) {
-                if (lettucePicked < 3f) {
-                    showText("NEED MORE LETTUCE")
-                } else if (potatoesPulled < 3f) {
+                if (potatoesPulled < 3f) {
                     showText("NEED MORE POTATOES")
+                } else if (lettucePicked < 3f) {
+                    showText("NEED MORE LETTUCE")
                 } else {
                     showCookingPotatoSalad(appearing = true, count = 8)
                 }
@@ -322,7 +343,7 @@ class GameScreen(
         }
 
         map.forEachRectangle("duck-hunt") {
-            activities["duck-hunt"] = Activity(markerTexture, it) {
+            activities["duck-hunt"] = Activity(targetTexture, it) {
                 showDuckHunt()
             }
         }
@@ -338,17 +359,23 @@ class GameScreen(
                 }
             }
         }
-        resetNightHunt()
+        map.forEachRectangle("night-hunt") {
+            activities["night-hunt"] = Activity(markerTexture, it) {
+                if (isEvening()) {
+                    showText("SNOW HAS ALREADY MELTED")
+                } else {
+                    showText("LOVE THIS SNOWY\nMOUNTAIN VIEW")
+                }
+            }
+        }
     }
 
     private fun resetNightHunt() {
+        if (night == null) return
         map.forEachRectangle("night-hunt") {
-            activities["night-hunt"] = Activity(markerTexture, it) {
-                if (night != null) {
-                    showNightHunt(it)
-                } else {
-                    showText("LOVE THIS VIEW")
-                }
+            activities["night-hunt"] = Activity(targetTexture, it) {
+                activities.remove("night-hunt")
+                showNightHunt(it)
             }
         }
     }
@@ -358,12 +385,16 @@ class GameScreen(
     }
 
     private fun showText(text: String) {
+        speechSound.play()
         textToShow = text.split("\n")
         characterTextCountdown = 3f
     }
 
-    private fun showLogPowerCheck(appearing: Boolean = true, powerForFixedPosition: Float, count: Int = 0) {
-        activePrecisionCheckEnding = Ending.WOOD_SPLITTING_WINS
+    private var gameTimer = 0f
+    private var showGameTimer = false
+
+    private fun showLogPowerCheck(appearing: Boolean = true, powerForFixedPosition: Float, missedCount: Int = 0) {
+        activePrecisionCheckEnding = Ending.COULD_NOT_DO
         precisionCheck.show(
             logTexture,
             target = 0.9f,
@@ -374,29 +405,33 @@ class GameScreen(
             showGuide = false,
             appearing = appearing,
             onActionCallback = { position, delta ->
-                if (true) {
-                    // TODO: return sound when sound is there
-                } else if (delta > 0.5f) {
-                    chompSound.play(0.6f)
+                if (delta > 0.5f) {
+                    chompSound.play()
                 } else {
                     crashSound.play()
                 }
             }) { position, delta ->
             if (delta > 0.5f) {
                 showText("HIT HARDER")
-                showLogPowerCheck(appearing = false, powerForFixedPosition = powerForFixedPosition, count = count)
-            } else if (count < 3) {
-                showLogPrecisionCheck(appearing = false, showGuide = count == 2, count = count + 1)
+                showLogPowerCheck(
+                    appearing = false,
+                    powerForFixedPosition = powerForFixedPosition,
+                    missedCount = missedCount
+                )
             } else {
-                activities.remove("wood-split")
-                firewoodCollected = 1f
-                showText("GOT FIREWOOD")
+                firewoodCollected += 1f - delta / 2f
+                if (firewoodCollected < 3f) {
+                    showLogPrecisionCheck(appearing = false, showGuide = missedCount > 1, missedCount = missedCount)
+                } else {
+                    activities.remove("wood-split")
+                    showText("GOT FIREWOOD")
+                }
             }
         }
     }
 
-    private fun showLogPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = false, count: Int = 0) {
-        activePrecisionCheckEnding = Ending.WOOD_SPLITTING_WINS
+    private fun showLogPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = false, missedCount: Int = 0) {
+        activePrecisionCheckEnding = Ending.COULD_NOT_DO
         precisionCheck.show(
             logTexture,
             target = 0f,
@@ -407,17 +442,19 @@ class GameScreen(
             showGuide = showGuide,
             appearing = appearing
         ) { position, delta ->
-            if (delta > 0.2f) {
-                showText("HIT IN THE MIDDLE")
-                showLogPrecisionCheck(appearing = false, showGuide = true, count = count)
+            if (delta > 0.25f) {
+                if (missedCount == 1) {
+                    showText("AIM FOR THE MIDDLE")
+                }
+                showLogPrecisionCheck(appearing = false, showGuide = missedCount > 1, missedCount = missedCount + 1)
             } else {
-                showLogPowerCheck(appearing = false, powerForFixedPosition = position, count = count)
+                showLogPowerCheck(appearing = false, powerForFixedPosition = position, missedCount = missedCount)
             }
         }
     }
 
     private fun showLettuceCheck(appearing: Boolean = true, showGuide: Boolean = false, count: Int = 0) {
-        activePrecisionCheckEnding = Ending.LETTUCE_WINS
+        activePrecisionCheckEnding = Ending.COULD_NOT_DO
         precisionCheck.show(
             lettuceTexture,
             target = -0.8f,
@@ -425,7 +462,10 @@ class GameScreen(
             isVertical = false,
             powerForFixedPosition = null,
             showGuide = showGuide,
-            appearing = appearing
+            appearing = appearing,
+            onActionCallback = { _, _ ->
+                lettuceSound.play()
+            }
         ) { position, delta ->
             lettucePicked += 1f - delta / 2f
             if (lettucePicked >= 3) {
@@ -441,7 +481,7 @@ class GameScreen(
     }
 
     private fun showPotatoPowerCheck(appearing: Boolean = true, count: Int = 0) {
-        activePrecisionCheckEnding = Ending.POTATO_WINS
+        activePrecisionCheckEnding = Ending.COULD_NOT_DO
         precisionCheck.show(
             potatoTexture,
             target = 0.9f,
@@ -451,6 +491,9 @@ class GameScreen(
             powerForFixedPosition = -10f,
             showGuide = false,
             appearing = appearing,
+            onActionCallback = { _, _ ->
+                potatoSound.play()
+            }
         ) { position, delta ->
             potatoesPulled += 1f - delta / 2f
             if (potatoesPulled > 3f) {
@@ -466,7 +509,7 @@ class GameScreen(
     }
 
     private fun showDuckHunt() {
-        activePrecisionCheckEnding = Ending.DUCK_WINS
+        activePrecisionCheckEnding = Ending.NOTHING_SPECIAL
         for (i in 0..5) {
             val right = Random.nextBoolean()
             val offsetX = if (right) {
@@ -498,11 +541,18 @@ class GameScreen(
                 val playerX = player.body.position.x
                 val positionOffset = (position * VIRTUAL_WIDTH / 2f).units
                 val hitPosition = playerX + positionOffset
+                var atLeastOneDead = false
                 ducks.forEach {
                     val accuracy = Math.abs(it.currentPositionX - hitPosition)
                     if (accuracy <= 0.2f) {
                         it.dead = true
+                        atLeastOneDead = true
                     }
+                }
+                if (atLeastOneDead) {
+                    shotSound.play()
+                } else {
+                    showText("MISSED")
                 }
             }
         ) { position, delta ->
@@ -528,7 +578,6 @@ class GameScreen(
             appearing = false,
             isFullscreen = true,
         ) { position, delta ->
-            activities.remove("night-hunt")
             val playerX = player.body.position.x
             night?.let {
                 val positionOffset = (position * VIRTUAL_WIDTH / 2f).units
@@ -546,8 +595,8 @@ class GameScreen(
                         it.freeze(3f)
                     }
                 } else {
-                    showText("TARGET FOR ITS BODY")
-                    showNightHunt(activity)
+                    showText("AIM FOR ITS BODY")
+                    resetNightHunt()
                 }
             }
         }
@@ -566,17 +615,11 @@ class GameScreen(
             appearing = false,
             onActionCallback = { position, delta ->
                 night?.freeze(1f)
-
-                if (true) {
-                    // TODO: return sound when sound is there
-                } else if (delta > 0.5f) {
-                    chompSound.play(0.6f)
-                } else {
-                    crashSound.play()
-                }
+                chompSound.play()
             }) { position, delta ->
             if (delta > 0.25f) {
                 showText("HIT HARDER")
+                resetNightHunt()
             } else {
                 val health = night?.let {
                     it.health -= 1f - delta * powerForFixedPosition
@@ -585,7 +628,7 @@ class GameScreen(
                 if (health > 2f) {
                     showText("IT IS TOUGH")
                 } else if (health > 1f) {
-                    showText("ALMOST GOT IT")
+                    showText("IT WORKS")
                 } else if (health > 0f) {
                     showText("JUST ONE MORE")
                 } else {
@@ -593,7 +636,11 @@ class GameScreen(
                     night?.freeze(500f)
                     shouldFade = true
                     timeToShowLastCooking = 2f
+                    if (!activities.containsKey("cooking") && gameTimer > 80f) {
+                        finishedLateBecauseOfPotatoSalad++
+                    }
                     activities.keys.filter { !it.equals("bed") }.forEach { activities.remove(it) }
+                    printedSounds.clear() // just to make the title screen bump again
                 }
                 if (!isGameEnding) {
                     resetNightHunt()
@@ -603,7 +650,7 @@ class GameScreen(
     }
 
     private fun showHeadPrecisionCheck(appearing: Boolean = true, showGuide: Boolean = false, count: Int = 0) {
-        activePrecisionCheckEnding = Ending.NIGHT_HEAD
+        activePrecisionCheckEnding = Ending.NIGHT
         precisionCheck.show(
             cookedHead,
             target = 0.5f,
@@ -621,8 +668,9 @@ class GameScreen(
         ) { position, delta ->
             if (delta > 0.2f) {
                 if (count > 2) {
-                    night?.freeze(0f)
+                    night?.freeze(0.01f)
                     showText("LET'S TRY AGAIN")
+                    resetNightHunt()
                 } else {
                     showText("AIM FOR NECK")
                     showHeadPrecisionCheck(appearing = false, showGuide = count > 1, count + 1)
@@ -634,8 +682,8 @@ class GameScreen(
         }
     }
 
-    private fun showWoodCutter(key: String, showGuide: Boolean = false, count: Int = 0) {
-        activePrecisionCheckEnding = Ending.WOOD_CUTTING_WINS
+    private fun showWoodCutter(key: String, showGuide: Boolean = false, missedCount: Int = 0) {
+        activePrecisionCheckEnding = Ending.COULD_NOT_DO
         precisionCheck.show(
             null,
             target = -0.45f,
@@ -645,23 +693,36 @@ class GameScreen(
             showGuide = showGuide,
             appearing = false,
             isFullscreen = true,
+            onActionCallback = { position, delta ->
+                if (delta <= 0.2f) {
+                    woodCollected += 1f - delta / 2f
+                    if (woodCollected >= 3f) {
+                        crashSound.play()
+                    } else {
+                        chompSound.play()
+                    }
+                }
+            }
         ) { position, delta ->
-            woodCollected += 1f - delta / 2f
-            if (woodCollected >= 3f) {
-                showText("GOT SOME WOOD")
-                interactiveTrees.remove(key)
-                activities.remove(key)
-            } else {
-                if (count == 2 && woodCollected < 2f) {
+            if (delta > 0.2f) {
+                if (missedCount == 1) {
                     showText("HIT THE TRUNK")
                 }
-                showWoodCutter(key, showGuide = count > 3, count + 1)
+                showWoodCutter(key, showGuide = missedCount > 1, missedCount + 1)
+            } else {
+                if (woodCollected >= 3f) {
+                    showText("GOT SOME WOOD")
+                    interactiveTrees.remove(key)
+                    activities.remove(key)
+                } else {
+                    showWoodCutter(key, showGuide = missedCount > 1, missedCount)
+                }
             }
         }
     }
 
     private fun showCookingPotatoSalad(appearing: Boolean = true, count: Int = 7) {
-        activePrecisionCheckEnding = Ending.POTATO_SALAD_WINS
+        activePrecisionCheckEnding = Ending.COULD_NOT_COOK
         precisionCheck.show(
             potatoSaladTexture,
             target = -0.6f,
@@ -669,7 +730,14 @@ class GameScreen(
             isVertical = count % 2 > 0,
             showGuide = true,
             appearing = appearing,
-            disappearIn = if (count == 0) 1f else 0f
+            disappearIn = if (count == 0) 1f else 0f,
+            onActionCallback = { _, _ ->
+                if (count > 0) {
+                    cookSound.play()
+                } else {
+                    cookedSound.play()
+                }
+            }
         ) { position, delta ->
             if (count > 0) {
                 showCookingPotatoSalad(appearing = false, count = count - 1)
@@ -682,7 +750,7 @@ class GameScreen(
     }
 
     private fun showCookingDuck(appearing: Boolean = true, count: Int = 7) {
-        activePrecisionCheckEnding = Ending.ROAST_DUCK_WINS
+        activePrecisionCheckEnding = Ending.COULD_NOT_COOK
         precisionCheck.show(
             cookedDuck,
             target = -0.6f,
@@ -690,7 +758,14 @@ class GameScreen(
             isVertical = count % 2 > 0,
             showGuide = true,
             appearing = appearing,
-            disappearIn = if (count == 0) 1f else 0f
+            disappearIn = if (count == 0) 1f else 0f,
+            onActionCallback = { _, _ ->
+                if (count > 0) {
+                    cookSound.play()
+                } else {
+                    cookedSound.play()
+                }
+            },
         ) { position, delta ->
             if (count > 0) {
                 showCookingDuck(appearing = false, count = count - 1)
@@ -699,31 +774,68 @@ class GameScreen(
                 hud.increaseStamina(1f)
                 activities.remove("stove")
                 night = createNight()
+                resetNightHunt()
             }
         }
     }
 
     private fun showCookingNight(appearing: Boolean = true, count: Int = 7) {
-        activePrecisionCheckEnding = Ending.NOT_ENDING
+        activePrecisionCheckEnding = Ending.TRUE_ENDING
         precisionCheck.show(
-            cookedHead,
+            nightSnow,
             target = -0.6f,
             speed = 5f,
             isVertical = count % 2 > 0,
             showGuide = true,
             appearing = appearing,
-            disappearIn = if (count == 0) 1f else 0f
+            disappearIn = if (count == 0) 1f else 0f,
+            onActionCallback = { _, _ ->
+                if (count > 0) {
+                    cookSound.play()
+                } else {
+                    cookedSound.play()
+                }
+            },
         ) { position, delta ->
             if (count > 0) {
                 showCookingNight(appearing = false, count = count - 1)
             } else {
-                night?.freeze(0f)
+                night?.let { night ->
+                    night.freeze(0.01f)
+                    val bodyPosition = night.body.position
+                    val x = bodyPosition.x * GuardianGame.PIXELS_PER_UNIT
+                    val y = bodyPosition.y * GuardianGame.PIXELS_PER_UNIT
+                    val width = 12 * 16f
+                    val height = 2 * 16f
+                    activities["mess"] =
+                        Activity(markerTexture, Rectangle(x - width / 2, y - height / 2, width, height)) {
+                            showText("GOTTA CLEAN UP\nTHIS MESS TOMORROW")
+                            activities.remove("mess")
+                        }
+                }
                 shouldFade = false
             }
         }
     }
 
-    private fun printWhiteCentered(line: String, y: Float) {
+    private fun printWhiteTopLeft(line: String) {
+        whiteTextDrawer.draw(
+            batch,
+            camera,
+            listOf(line),
+            (camera.position.x - VIRTUAL_WIDTH.units / 2f).pixels,
+            (camera.position.y + VIRTUAL_HEIGHT.units / 2f - 10f.units).pixels,
+            ignoreLastPosition = true
+        )
+    }
+
+    private val printedSounds = mutableSetOf<String>()
+
+    private fun printWhiteCentered(line: String, y: Float, silent: Boolean = false) {
+        if (!silent && !printedSounds.contains(line)) {
+            printedSounds += line
+            titleTextSound.play()
+        }
         whiteTextDrawer.draw(
             batch,
             camera,
@@ -735,6 +847,10 @@ class GameScreen(
     }
 
     private fun printBlackCentered(line: String, y: Float) {
+        if (!printedSounds.contains(line)) {
+            printedSounds += line
+            titleTextSound.play()
+        }
         characterTextDrawer.draw(
             batch,
             camera,
@@ -751,27 +867,34 @@ class GameScreen(
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
 
         if (!isGameStarted) {
-            if (endingResetTimeout <= ENDING_RESET_TIMEOUT_SECONDS) {
+            if (endingResetTimeout <= FINAL_ENDING_RESET_TIMEOUT_SECONDS) {
                 endingResetTimeout += delta
             }
             camera.position.x = (VIRTUAL_WIDTH / 2f).units
             camera.position.y = (VIRTUAL_HEIGHT / 2f).units
             viewport.apply() // other viewports at check renderers are applying their own stuff
-            printBlackCentered("GUARDIAN OF THE MOUNTAIN PEAK", VIRTUAL_HEIGHT / 2f + 80f)
+            printBlackCentered("GUARDIAN OF THE MOUNTAIN PEAK", VIRTUAL_HEIGHT / 2f + 96f)
             if (endingResetTimeout >= ENDING_NUMBER_TIMEOUT_SECONDS) {
-                printWhiteCentered("  MOVE     JUMP     ACTION", VIRTUAL_HEIGHT / 2f + 32f)
-                printWhiteCentered(" ARROWS     X         Z  ", VIRTUAL_HEIGHT / 2f + 16F)
-                printWhiteCentered("  A D       J         K  ", VIRTUAL_HEIGHT / 2f)
-                printWhiteCentered("            UP      SHIFT", VIRTUAL_HEIGHT / 2f - 16F)
-                printWhiteCentered("            W       SPACE", VIRTUAL_HEIGHT / 2f - 32F)
+                printWhiteCentered("BY MATTE FOR ACEROLA JAM 0", VIRTUAL_HEIGHT / 2f + 64f)
             }
             if (endingResetTimeout >= ENDING_RESET_TIMEOUT_SECONDS) {
-                printWhiteCentered("PRESS ANY KEY TO START", VIRTUAL_HEIGHT / 2f - 96f)
+                printWhiteCentered("  MOVE     JUMP     ACTION", VIRTUAL_HEIGHT / 2f + 32f)
+                printWhiteCentered(" ARROWS     X         Z  ", VIRTUAL_HEIGHT / 2f + 16F, silent = true)
+                printWhiteCentered("  A D       J         K  ", VIRTUAL_HEIGHT / 2f, silent = true)
+                printWhiteCentered("            UP      SHIFT", VIRTUAL_HEIGHT / 2f - 16F, silent = true)
+                printWhiteCentered("            W       SPACE", VIRTUAL_HEIGHT / 2f - 32F, silent = true)
+            }
+            if (endingResetTimeout >= FINAL_ENDING_RESET_TIMEOUT_SECONDS) {
+                printWhiteCentered("PRESS ACTION TO START", VIRTUAL_HEIGHT / 2f - 96f)
             }
             return
         }
 
         val isPlayerInWater = player.body.position.y < floorY
+        if (isPlayerInWater != wasPlayerInWater) {
+            wasPlayerInWater = isPlayerInWater
+            splashSound.play()
+        }
         // setup an ending
         ending = when {
             enteredLostWoods -> Ending.LOST_IN_WOODS
@@ -781,21 +904,61 @@ class GameScreen(
         }
 
         if (hud.stamina == 0f) {
-            if (endingResetTimeout <= ENDING_RESET_TIMEOUT_SECONDS) {
-                endingResetTimeout += delta
+            val deathDelay = 1f
+            if (deathSoundDelay == 0f) {
+                if (woodsMusic.isPlaying) {
+                    woodsMusic.stop()
+                }
+                deathSound.play()
             }
+            if (deathSoundDelay < deathDelay) {
+                deathSoundDelay += delta
+            }
+            if (deathSoundDelay < deathDelay) {
+                return
+            }
+            if (endingResetTimeout <= FINAL_ENDING_RESET_TIMEOUT_SECONDS) {
+                endingResetTimeout += delta + (deathSoundDelay - deathDelay)
+            }
+            deathSoundDelay = deathDelay
             camera.position.x = (VIRTUAL_WIDTH / 2f).units
             camera.position.y = (VIRTUAL_HEIGHT / 2f).units
             viewport.apply() // other viewports at check renderers are applying their own stuff
             printWhiteCentered(ending.text, VIRTUAL_HEIGHT / 2f + 32f)
-            if (endingResetTimeout >= ENDING_NUMBER_TIMEOUT_SECONDS) {
-                printWhiteCentered(
-                    "ENDING ${ending.ordinal + 1} OUT OF ${Ending.entries.size}",
-                    VIRTUAL_HEIGHT / 2f - 32f
-                )
-            }
-            if (endingResetTimeout >= ENDING_RESET_TIMEOUT_SECONDS) {
-                printWhiteCentered("PRESS ANY KEY TO START OVER", VIRTUAL_HEIGHT / 2f - 64f)
+            if (ending == Ending.TRUE_ENDING) {
+                if (endingResetTimeout >= ENDING_NUMBER_TIMEOUT_SECONDS) {
+                    printWhiteCentered(
+                        "ENDING ${ending.ordinal + 1} OUT OF ${Ending.entries.size}",
+                        VIRTUAL_HEIGHT / 2f
+                    )
+                }
+                if (endingResetTimeout >= ENDING_RESET_TIMEOUT_SECONDS) {
+                    val formattedTimer = formatGameTimer(gameTimer)
+                    val timerText = if (gameTimer > 90f) {
+                        "TIME: $formattedTimer OUT OF ${formatGameTimer(90f)}"
+                    } else if (gameTimer > 62.578f) {
+                        "$formattedTimer VS MATTE'S BEST ${formatGameTimer(62.578f)}"
+                    } else {
+                        "$formattedTimer, WOW, TELL ME HOW IN COMMENTS"
+                    }
+                    printWhiteCentered(
+                        timerText,
+                        VIRTUAL_HEIGHT / 2f - 32f
+                    )
+                }
+                if (endingResetTimeout >= FINAL_ENDING_RESET_TIMEOUT_SECONDS) {
+                    printWhiteCentered("PRESS ACTION TO START OVER", VIRTUAL_HEIGHT / 2f - 64f)
+                }
+            } else {
+                if (endingResetTimeout >= ENDING_NUMBER_TIMEOUT_SECONDS) {
+                    printWhiteCentered(
+                        "ENDING ${ending.ordinal + 1} OUT OF ${Ending.entries.size}",
+                        VIRTUAL_HEIGHT / 2f - 32f
+                    )
+                }
+                if (endingResetTimeout >= ENDING_RESET_TIMEOUT_SECONDS) {
+                    printWhiteCentered("PRESS ACTION TO START OVER", VIRTUAL_HEIGHT / 2f - 64f)
+                }
             }
             return
         }
@@ -804,9 +967,9 @@ class GameScreen(
         }
 
         // send update signals
-        world.step(1f / refreshRate, 6, 2)
+        world.step(1f / min(60, refreshRate), 6, 2)
         if (!shouldFade) {
-            player.update(delta, isPlayerInWater)
+            player.update(delta, isPlayerInWater, precisionCheck.showing && !precisionCheck.isFullscreen, refreshRate)
         }
         night?.update(delta, player.body.position.x)
         if (timeToShowLastCooking > 0f) {
@@ -832,6 +995,7 @@ class GameScreen(
             if (night != null) {
                 it.color.set(0.1f, 0.1f, 0.15f, 1f)
             } else if (isEvening()) {
+                pixelAligned = false
                 it.color.set(0.4f, 0.26f, 0.32f, 1f)
             } else {
                 it.color.set(0.5f, 0.5f, 0.6f, 1f)
@@ -862,6 +1026,8 @@ class GameScreen(
         }
         if (!enteredLostWoods && player.body.position.x > lostWoodsStartX) {
             enteredLostWoods = true
+            woodsMusic.play()
+
         }
         if (enteredLostWoods) {
             while (player.body.position.x < lostWoodsStartX) {
@@ -874,6 +1040,31 @@ class GameScreen(
         mapRenderer.renderBackground(camera, indoorFog, outdoorFog)
         batch.use(camera) {
             player.draw(it)
+            if (night == null && !isEvening()) {
+                // parallax snow mountain
+                val centerX = 12.351925f
+                val x = centerX + (player.body.position.x - centerX) * 0.3f
+                val y = floorY + 124f.units
+                val width = 20f.units
+                if (x < camera.position.x + (VIRTUAL_WIDTH / 2f).units && x > camera.position.x - (VIRTUAL_WIDTH / 2f).units - width) {
+                    pixelAligned = false
+                    it.draw(
+                        nightSnow,
+                        x.pixels,
+                        y.pixels,
+                        width,
+                        12f.units,
+                        0,
+                        0,
+                        nightSnow.width,
+                        nightSnow.height,
+                        true,
+                        false
+                    )
+                } else {
+                    pixelAligned = !showGameTimer
+                }
+            }
             night?.draw(it)
             largeTrees.forEach { it.render(batch) }
             topWoods.forEach { it.render(batch) }
@@ -916,55 +1107,64 @@ class GameScreen(
                 characterTextDrawer.clear()
             }
         }
+        if (showGameTimer) {
+            printWhiteTopLeft(formatGameTimer(gameTimer))
+        }
+        if (!potatoSaladHintShown && night == null && finishedLateBecauseOfPotatoSalad > 1) {
+            potatoSaladHintShown = true
+            showText("DO I EVEN NEED\nPOTATO SALAD")
+        }
+        gameTimer += delta
 
         precisionCheck.updateAndRender(delta, isGameEnding)
         if (!isGameEnding || (shouldFade && outdoorFog < 1f)) {
             hud.render()
         }
+
     }
 
-    private fun isEvening() = duckCollected > 0f && (woodCollected > 0f || firewoodCollected > 0f)
+    private fun formatGameTimer(timer: Float): String {
+        val millis = (timer * 1000).toInt() % 1000
+        val totalSeconds = timer.toInt()
+        val seconds = totalSeconds % 60
+        val minutes = totalSeconds / 60
+        return "%02d:%02d.%03d".format(minutes, seconds, millis)
+    }
+
+    private fun isEvening() = duckCollected > 0f && (woodCollected > 2.5f || firewoodCollected > 0f)
 
     override fun keyDown(keycode: Int): Boolean {
         // TODO: send signals to player
         if (!isGameStarted) {
-            if (endingResetTimeout > ENDING_RESET_TIMEOUT_SECONDS) {
-                endingResetTimeout = 0f
-                isGameStarted = true
+            if (keycode == Input.Keys.SPACE || keycode == Input.Keys.SHIFT_LEFT || keycode == Input.Keys.SHIFT_RIGHT || keycode == Input.Keys.K || keycode == Input.Keys.Z) {
+                if (endingResetTimeout > FINAL_ENDING_RESET_TIMEOUT_SECONDS) {
+                    endingResetTimeout = 0f
+                    isGameStarted = true
+                    printedSounds.clear() // just to make the "press action" bump again
+                    startSound.play()
+                }
             }
             return true
         }
         if (hud.stamina == 0f && isGameStarted) {
-            if (endingResetTimeout > ENDING_RESET_TIMEOUT_SECONDS) {
-                restart()
+            if (ending == Ending.TRUE_ENDING && endingResetTimeout > FINAL_ENDING_RESET_TIMEOUT_SECONDS || endingResetTimeout > ENDING_RESET_TIMEOUT_SECONDS) {
+                if (keycode == Input.Keys.SPACE || keycode == Input.Keys.SHIFT_LEFT || keycode == Input.Keys.SHIFT_RIGHT || keycode == Input.Keys.K || keycode == Input.Keys.Z) {
+                    restart()
+                }
             }
             return true
         }
         if (precisionCheck.processKeyDown(keycode)) return true
-        for (activity in activities.values) {
-            if (activity.processKeyDown(
-                    keycode,
-                    player.body.position.x,
-                    player.body.linearVelocity.y == 0f
-                )
-            ) return true
-        }
-
-        if (night != null) {
-            // terrible hack, but I have no idea how to handle all the possible scenarios of night hunt being disabled
-            if (!activities.containsKey("night-hunt") && night?.isFrozen != true && (night?.health ?: 0f) > 0f) {
-                resetNightHunt()
+        if (!precisionCheck.showing) {
+            for (activity in activities.values) {
+                if (activity.processKeyDown(
+                        keycode,
+                        player.body.position.x,
+                        player.body.linearVelocity.y == 0f
+                    )
+                ) return true
             }
         }
-
-        /*        when (keycode) {
-                    Keys.F -> toggleFullScreen()
-                    Keys.NUM_1 -> showLettuceCheck()
-                    Keys.NUM_2 -> showLogPrecisionCheck()
-                    Keys.NUM_3 -> showDuckHunt()
-                    Keys.NUM_4 -> showPotatoPowerCheck()
-                    Keys.NUM_5 -> showCookingPotatoSalad()
-                }*/
         hud.processKeyDown(keycode)
         return true
     }
@@ -1004,11 +1204,15 @@ class GameScreen(
 
 
     private fun restart() {
-        world.destroyBody(player.body)
+        if (showGameTimer || ending == Ending.TRUE_ENDING) {
+            showGameTimer = true
+        }
+        gameTimer = 0f
         night?.let {
             world.destroyBody(it.body)
             night = null
         }
+        world.destroyBody(player.body)
         player = createPlayer()
         hud.reset()
         precisionCheck.reset()
@@ -1024,7 +1228,7 @@ class GameScreen(
         potatoesPulled = 0f
         lettucePicked = 0f
         resetActivities()
-        pixelAligned = true
+        pixelAligned = !showGameTimer
         isGameEnding = false
         shouldFade = false
         timeToShowLastCooking = 0f
@@ -1032,30 +1236,28 @@ class GameScreen(
         firewoodCollected = 0f
         fireballs.clear()
         ducks.clear()
+        potatoSaladHintShown = false
+        deathSoundDelay = 0f
+        wasPlayerInWater = false
+        printedSounds.clear()
+        startSound.play()
     }
 
     enum class Ending(val text: String) {
-        NOT_ENDING("GUARDIAN OF THE MOUNTAIN PEAK"),
+        TRUE_ENDING("GUARDIAN OF THE MOUNTAIN PEAK"),
         DROWN("DROWN IN WATER"),
         FROZEN_BY_STREAM("FROZEN BY MOUNTAIN STREAM"),
-        POTATO_WINS("BEATEN BY POTATO"),
-        LETTUCE_WINS("BEATEN BY LETTUCE"),
-        POTATO_SALAD_WINS("BEATEN BY POTATO SALAD"),
-        WOOD_SPLITTING_WINS("COULD NOT SPLIT A LOG"),
-        WOOD_CUTTING_WINS("COULD NOT CUT A WOOD"),
-        DUCK_WINS("COULD NOT HUNT A DUCK"),
-        ROAST_DUCK_WINS("COULD NOT COOK A DUCK"),
+        COULD_NOT_DO("COULDN'T COMPLETE A TASK"),
+        COULD_NOT_COOK("STARVED WHILE COOKING"),
         LOST_IN_WOODS("LOST IN WOODS"),
         NIGHT("DIDN'T SURVIVE THE NIGHT"),
-        NIGHT_FIRE("BURNT IN FIRE"),
-        NIGHT_CRASH("CRASHED BY DRAGON"),
-        NIGHT_HEAD("COULDN'T BEAT THE DRAGON"),
-        EATEN_BY_NIGHT("EATEN BY DRAGON"),
         NOTHING_SPECIAL("STARVED TO DEATH"),
     }
 
     companion object {
+        private val FINAL_ENDING_RESET_TIMEOUT_SECONDS = 3f
         private val ENDING_RESET_TIMEOUT_SECONDS = 2f
         private val ENDING_NUMBER_TIMEOUT_SECONDS = 1f
     }
 }
+

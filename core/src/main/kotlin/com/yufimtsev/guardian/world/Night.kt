@@ -1,5 +1,7 @@
 package com.yufimtsev.guardian.world
 
+import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
 import com.badlogic.gdx.graphics.g2d.Sprite
@@ -60,7 +62,22 @@ class Night(
     private val flyAnimation =
         Animation(0.06f, GdxArray(Array(flyAnimationSequence.size) { flyTextures[flyAnimationSequence[it]] }))
 
+
+    private val fireballSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("night_fireball.wav")) }
+    private val freezeSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("night_freeze.wav")) }
+    private val hitSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("night_hit.wav")) }
+    private val deadSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("night_dead.wav")) }
+    private val pickSound: Sound by remember { Gdx.audio.newSound(Gdx.files.internal("night_pick.wav")) }
+
     var health = 2.5f
+        set(value) {
+            if (value <= 0f) {
+                deadSound.play()
+            } else {
+                hitSound.play()
+            }
+            field = value
+        }
     val body: Body = world.createBody(BodyDef().apply {
         position.set(spawnPosition.x.units, spawnPosition.y.units)
         type = BodyDef.BodyType.DynamicBody
@@ -142,6 +159,7 @@ class Night(
             fireballTimer -= delta
             if (fireballTimer <= 0f) {
                 if (state == State.INIT) {
+                    fireballSound.play()
                     spawnFireball(
                         Vector2((originX + diff * timeFraction).pixels, (body.position.y + 64f.units).pixels),
                         true
@@ -150,6 +168,7 @@ class Night(
                 } else {
                     val goingRight = state == State.FLYING_RIGHT
                     val offsetX = if (goingRight) 64f else -64f
+                    fireballSound.play()
                     spawnFireball(Vector2(body.position.x + offsetX.units, body.position.y), goingRight)
                     fireballTimer = max(0.2f, health / 2f)
                 }
@@ -160,6 +179,9 @@ class Night(
     }
 
     fun freeze(time: Float) {
+        if (timeToFreeze <= 0f) {
+            freezeSound.play()
+        }
         timeToFreeze = time
     }
 
@@ -194,6 +216,9 @@ class Night(
                 currentStateIndex++
             }
             currentState = stateSequence[currentStateIndex].first
+            if (currentState == State.PICKING) {
+                pickSound.play()
+            }
         }
 
         val result = when (currentState) {

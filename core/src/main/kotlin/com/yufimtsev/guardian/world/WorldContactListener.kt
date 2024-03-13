@@ -30,7 +30,6 @@ class WorldContactListener(private val onNightCollision: (fatal: Boolean, fire: 
 
                 is Night.Fatal -> onNightCollision(true, false)
                 is Fireball -> {
-                    println("fireball shot")
                     player.body.applyLinearImpulse(
                         player.body.worldCenter.minus(target.body.worldCenter).scl(4f),
                         player.body.worldCenter,

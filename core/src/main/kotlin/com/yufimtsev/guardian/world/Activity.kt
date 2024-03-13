@@ -39,7 +39,7 @@ class Activity(private val markerTexture: Texture, private val position: Rectang
 
     fun processKeyDown(keycode: Int, playerX: Float, playerStanding: Boolean): Boolean {
         if (isActive && playerStanding && position.x.units < playerX && (position.x + position.width).units > playerX) {
-            if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z || keycode == Keys.DOWN || keycode == Keys.S) {
+            if (keycode == Keys.SPACE || keycode == Keys.SHIFT_LEFT || keycode == Keys.SHIFT_RIGHT || keycode == Keys.K || keycode == Keys.Z) {
                 onAction(this)
                 isActive = false
                 return true
